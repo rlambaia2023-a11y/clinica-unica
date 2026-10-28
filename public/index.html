@@ -57,8 +57,8 @@
     <input id="nome" placeholder="Seu nome completo" required>
     <input id="telefone" placeholder="WhatsApp com DDD" required>
     <select id="tipoConsulta" aria-label="Tipo de consulta"></select>
-    <select id="modalidade" aria-label="Modalidade da consulta"><option>Presencial</option><option>Online</option></select>
     <select id="localId" aria-label="Local da consulta"></select>
+    <p>Escolha o local: online é Google Meet; presencial é Maraclin ou Santa Casa. O Centro Médico O Bom Doutor ainda não está aberto para reserva, porque o endereço completo está em confirmação.</p>
     <input id="motivo" placeholder="Motivo da consulta (opcional)">
     <p>Profissional, dia e hora escolhidos: <strong id="escolha">nenhum ainda</strong></p>
     <button type="submit">Confirmar agendamento</button>
@@ -75,17 +75,21 @@
     <button id="btnBuscar">Buscar</button>
   </div>
   <div id="listaMeus"></div>
-  <h3>Lembretes de amanhã</h3>
-  <div id="listaLembretes"></div>
 </section>
 
 <section id="aba-profissional" class="aba escondido">
-  <h2>Agenda do profissional</h2>
-  <p class="aviso">Esta área é só do profissional. Se o sistema foi iniciado com PROF_CODE, informe o código abaixo. Sem código definido, a área fica aberta em modo demonstração.</p>
+  <h2>Área do profissional</h2>
+  <p>Esta área exige login. A primeira conta profissional é criada aqui, uma única vez; depois disso o cadastro fecha e só o login funciona. A senha é guardada criptografada, nunca em texto aberto.</p>
+  <div id="authProf"></div>
+  <h3>Lembretes de amanhã pelo WhatsApp</h3>
+  <p>O envio usa o WhatsApp configurado nas variáveis (oficial ou CallMeBot). Sem provedor configurado, o sistema avisa que não enviou, em vez de fingir que enviou.</p>
   <div class="linha">
-    <input type="password" id="profCode" placeholder="Código de acesso do profissional" aria-label="Código de acesso do profissional">
-    <button id="btnProfCode" type="button">Usar este código</button>
+    <button id="btnVerLembretes" type="button">Ver lembretes de amanhã</button>
+    <button id="btnEnviarLembretes" type="button">Enviar lembretes de amanhã</button>
   </div>
+  <div id="listaLembretesProf"></div>
+  <p id="resultadoLembretes" class="resposta"></p>
+  <h2>Agenda do profissional</h2>
   <div class="linha">
     <select id="agendaProf"></select>
     <input type="date" id="agendaData">
@@ -104,7 +108,7 @@
   <p id="resultadoNota" class="resposta"></p>
 </section>
 </main>
-<footer><p>Código próprio, em português. Nada aqui foi copiado do Doctoralia: só as funções foram analisadas e refeitas do zero. O Gineco-AI continua separado, com protocolos, calculadoras completas e busca inteligente; aqui fica a camada de agendamento da clínica.</p></footer>
+<footer><p>Código próprio, em português. Nada aqui foi copiado do Doctoralia: só as funções foram analisadas e refeitas do zero. O Gineco-AI continua separado, com protocolos, calculadoras completas e busca inteligente; aqui fica a camada de agendamento da clínica. Privacidade: dados de paciente ficam só na clínica, para agendamento e lembrete; prontuário só é visto pela profissional logada.</p></footer>
 <script src="app.js"></script>
 </body>
 </html>

@@ -1,9 +1,24 @@
-# Clínica Única v1 — Gineco primeiro — sistema criado
+# Clínica Única v1.1 — modo real — Gineco primeiro
 
 Sistema próprio, em português, sem copiar código, visual ou marca do Doctoralia.
 Só as funções públicas foram analisadas e refeitas do zero, com melhorias.
-Versionado localmente (git, sem remoto): primeiro commit em 2026-10-28.
-Ainda NÃO publicado no GitHub nem na Railway.
+Versionado localmente (git) e publicado em 2026-10-28.
+
+- GitHub: https://github.com/rlambaia2023-a11y/clinica-unica
+- Railway: projeto `clinica-unica`, serviço `clinica-unica`,
+  https://clinica-unica-production.up.railway.app/
+  Volume `clinica-unica-volume` em /app/data, variáveis DATA_DIR=/app/data
+  e GEMINI_MODEL=gemini-3.5-flash-lite. Verificado ao vivo: página 200,
+  /api/health ok:true, área do profissional protegida por login.
+
+A v1.1 saiu da demonstração: login do profissional com senha
+criptografada, grade real por local, volume persistente na Railway e
+envio de lembrete por WhatsApp com status honesto (o código está pronto;
+o envio só acontece com provedor e credenciais configurados).
+
+PENDENTE antes de divulgar para pacientes: criar a primeira conta
+profissional na própria página (aba Área do profissional) e definir
+GEMINI_API_KEY e as variáveis do WhatsApp na Railway.
 
 ## Rodar e publicar
 
@@ -18,8 +33,10 @@ Variáveis (veja `.env.example`):
 
 - `PORT`, `DATA_DIR` (na Railway: `/app/data`, com volume anexado)
 - `GEMINI_API_KEY` (opcional; sem ela, a nota por IA avisa e não inventa resumo)
-- `PROF_CODE` (código da área do profissional; sem ele, a área fica aberta
-  em modo demonstração e o `/api/health` avisa)
+- `WHATSAPP_PROVIDER` (meta ou callmebot) + credenciais do provedor
+  escolhido: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_TEMPLATE`
+  (oficial) ou `WHATSAPP_APIKEY` (CallMeBot). Sem provedor, o botão de
+  envio de lembretes devolve "não enviado" com o motivo, sem fingir envio.
 - `WHATSAPP_INTERNO` (só interno; nunca fixo no código e nunca devolvido
   pela API pública)
 
@@ -27,10 +44,12 @@ Deploy na Railway: Dockerfile + `railway.json` já prontos, serviço a partir
 deste código, volume em `/app/data` com `DATA_DIR=/app/data`. Sem volume,
 um redeploy apaga os agendamentos.
 
-Aviso honesto sobre o acesso: o `PROF_CODE` é um código compartilhado
-simples, não um login individual com senha. Serve para a v1; antes de
-guardar prontuários reais de pacientes, trocar por login próprio, no
-modelo do Gineco-AI.
+Login do profissional (v1.1, sem código compartilhado): a primeira conta
+é criada na própria página, na aba Área do profissional, uma única vez;
+depois o cadastro fecha e só o login funciona. A senha é guardada com
+scrypt (sal + hash), nunca em texto aberto, e a sessão dura 12 horas
+por cookie HttpOnly. Sem conta criada, a área fica fechada (401), o que
+é o comportamento certo no modo real.
 
 Primeira clínica: **Gineco — Consultas da Dra. Mayara Miranda**
 (ginecologia e obstetrícia, Centro Médico O Bom Doutor e consultas online).
@@ -126,21 +145,32 @@ fbbrmuseia.
   local no agendamento, e o local aparece nas consultas dela e na agenda
   do profissional.
 
-## O que ainda falta antes de usar com pacientes de verdade
+## Grade real por local (v1.1)
 
-- [ ] Endereço completo do Centro Médico O Bom Doutor
-- [ ] Dias e horários exatos e duração da consulta ("todos" foi
-      interpretado como todos os dias, grade atual 08:00 às 11:00 e
-      14:00 às 17:00, de 1 em 1 hora)
-- [ ] Login do profissional (hoje a área do profissional está aberta na demo)
-- [ ] Envio real do lembrete por WhatsApp oficial ou CallMeBot, com
-      confirmação e cancelamento em um toque dentro da mensagem
-- [ ] Teleconsulta por vídeo
+- Maraclin: segunda a sexta, 06:00 às 15:00, de 1 em 1 hora (ficha pública).
+- Santa Casa de São Félix: segunda a sexta, 08:00 às 17:00, grade padrão
+  da clínica — confirmar com a unidade.
+- Online (Google Meet): todos os dias, 08:00 às 17:00.
+- Centro Médico O Bom Doutor: fora da reserva até confirmar o endereço
+  completo. Aparece na lista de locais, mas o botão de reserva fica
+  desativado para ele.
+- Duração: 60 minutos por consulta, editável em `data/dados.json`
+  (`configHorarios.duracaoMinutos`), até a profissional confirmar outra.
+- Teleconsulta: fluxo manual do Meet (a profissional cola o link real na
+  agenda); criação automática pela conta mh.cuidarsaude@gmail.com ainda
+  depende da autorização no Google.
+
+## O que ainda falta
+
+- [ ] Endereço completo do Centro Médico O Bom Doutor (sem ele, não é reservável)
+- [ ] Confirmar com a unidade os horários da Santa Casa
+- [ ] Confirmar a duração exata da consulta (padrão atual: 60 minutos)
+- [ ] Criar a primeira conta profissional na página ao vivo
+- [ ] Definir as credenciais do WhatsApp (oficial ou CallMeBot) na Railway
+- [ ] Autorização no Google para criar o Meet automaticamente
 - [ ] Pagamento (Pix e cartão) — só com revisão antes de qualquer mudança
       em área de pagamento
-- [ ] Volume persistente no Railway e backup dos dados
-- [ ] LGPD: termo de consentimento, acesso do paciente ao próprio prontuário
-      e registro de quem acessou o quê
+- [ ] LGPD: termo de consentimento e registro de quem acessou o quê
 - [ ] Marketplace com várias clínicas — só depois que uma clínica estiver
       redonda; marketplace vazio não compete com rede pronta
 
@@ -153,3 +183,6 @@ fbbrmuseia.
 - `POST /api/checkin`, `POST /api/prontuario`, `POST /api/nota-ia`
 - `POST /api/calculadora-gestacional`
 - `POST /api/teleconsulta` (colar link do Google Meet na consulta online)
+- `GET /api/profissional/eu`, `POST /api/profissional/cadastro`,
+  `POST /api/profissional/login`, `POST /api/profissional/logout`
+- `POST /api/lembretes/enviar` (só com login; devolve enviado ou não enviado com o motivo)

@@ -1,14 +1,38 @@
 let profissionais = [], escolha = {}, ultimoTextoConfirmacao = "", clinicaInfo = "";
-let profCode = sessionStorage.getItem("profCode") || "";
 const $ = (id) => document.getElementById(id);
-const api = (rota, metodo, corpo) => fetch(rota, { method: metodo || "GET", headers: { "Content-Type": "application/json", ...(profCode ? { "x-prof-code": profCode } : {}) }, body: corpo ? JSON.stringify(corpo) : undefined }).then((r) => r.json());
+const api = (rota, metodo, corpo) => fetch(rota, { method: metodo || "GET", headers: { "Content-Type": "application/json" }, body: corpo ? JSON.stringify(corpo) : undefined }).then((r) => r.json());
 
 document.querySelectorAll("nav button").forEach((b) => b.onclick = () => {
   document.querySelectorAll("nav button").forEach((x) => x.classList.remove("ativo"));
   b.classList.add("ativo");
   document.querySelectorAll(".aba").forEach((s) => s.classList.add("escondido"));
   $("aba-" + b.dataset.aba).classList.remove("escondido");
+  if (b.dataset.aba === "profissional") atualizarAuth();
 });
+
+async function atualizarAuth() {
+  const d = await api("/api/profissional/eu");
+  const div = $("authProf");
+  if (!div) return;
+  if (d.logado) {
+    div.innerHTML = `<p>Logada como <strong>${d.email}</strong>.</p><div class="linha"><button id="btnLogout" type="button">Sair</button></div>`;
+    $("btnLogout").onclick = async () => { await api("/api/profissional/logout", "POST", {}); atualizarAuth(); };
+  } else if (!d.temConta) {
+    div.innerHTML = `<p><strong>Criar a primeira conta profissional</strong> (só aparece uma vez, até a primeira conta existir):</p><div class="linha"><input id="authEmail" type="email" placeholder="E-mail da profissional"><input id="authSenha" type="password" placeholder="Senha (mínimo 8 caracteres)"><button id="btnCadastro" type="button">Criar conta</button></div><p id="authMsg" class="resposta"></p>`;
+    $("btnCadastro").onclick = async () => {
+      const r = await api("/api/profissional/cadastro", "POST", { email: $("authEmail").value, senha: $("authSenha").value });
+      $("authMsg").textContent = r.ok ? r.mensagem : r.erro;
+      if (r.ok) atualizarAuth();
+    };
+  } else {
+    div.innerHTML = `<p><strong>Entrar na área do profissional:</strong></p><div class="linha"><input id="authEmail" type="email" placeholder="E-mail"><input id="authSenha" type="password" placeholder="Senha"><button id="btnLogin" type="button">Entrar</button></div><p id="authMsg" class="resposta"></p>`;
+    $("btnLogin").onclick = async () => {
+      const r = await api("/api/profissional/login", "POST", { email: $("authEmail").value, senha: $("authSenha").value });
+      $("authMsg").textContent = r.ok ? `Bem-vinda, ${r.email}.` : r.erro;
+      if (r.ok) atualizarAuth();
+    };
+  }
+}
 
 function datasProximas() {
   const sel = $("selData"); sel.innerHTML = "";
@@ -28,16 +52,17 @@ async function carregar() {
   clinicaInfo = d.clinica;
   $("nomeClinica").textContent = d.clinica.nome;
   $("avisoClinica").textContent = d.clinica.aviso;
-  $("infoClinica").textContent = `Atendimento: ${(d.clinica.modalidades || []).join(" e ")}. Pagamento: ${d.clinica.pagamento || ""}. ${d.clinica.politicaCancelamentoTexto || ""}`;
+  $("infoClinica").textContent = `Atendimento: ${(d.clinica.modalidades || []).join(" e ")}. Pagamento: ${d.clinica.pagamento || ""}. Consultas de ${d.duracaoMinutos || 60} minutos. ${d.clinica.politicaCancelamentoTexto || ""}`;
   $("filtroEsp").innerHTML = '<option value="">Todas</option>' + d.especialidades.map((e) => `<option>${e}</option>`).join("");
   $("tipoConsulta").innerHTML = (d.tiposConsulta || []).map((t) => `<option>${t}</option>`).join("");
   $("listaLocais").innerHTML = (d.clinica.locais || []).map((l) => `<div class="card"><strong>${l.nome}</strong><br>${l.endereco} — ${l.cidade}${l.cep ? ", CEP " + l.cep : ""}<br>${l.telefone ? "Tel: " + l.telefone + "<br>" : ""}${l.horario || ""}<br><em>${l.status === "confirmado" ? "Endereço verificado" : "Endereço a confirmar"}</em></div>`).join("");
-  $("localId").innerHTML = (d.clinica.locais || []).map((l) => `<option value="${l.id}">${l.nome}${l.status === "confirmado" ? "" : " (endereço a confirmar)"}</option>`).join("") + '<option value="online">Online (Google Meet)</option>';
+  $("localId").innerHTML = (d.clinica.locais || []).map((l) => `<option value="${l.id}" ${l.reservavel ? "" : "disabled"}>${l.nome}${l.reservavel ? "" : " (endereço a confirmar — em breve)"}</option>`).join("") + '<option value="online">Online (Google Meet)</option>';
+  $("localId").value = "online";
   $("agendaProf").innerHTML = profissionais.map((p) => `<option value="${p.id}">${p.nome} — ${p.especialidade}</option>`).join("");
   renderProfissionais();
   datasProximas();
   carregarSlots();
-  carregarLembretes();
+  atualizarAuth();
 }
 function renderProfissionais() {
   const filtro = $("filtroEsp").value;
@@ -48,8 +73,10 @@ function renderProfissionais() {
 async function carregarSlots() {
   if (!escolha.profissionalId) { escolha.profissionalId = profissionais[0]?.id; renderProfissionais(); }
   escolha.data = $("selData").value;
-  const d = await api(`/api/disponibilidade?profissional=${escolha.profissionalId}&data=${escolha.data}`);
-  $("slots").innerHTML = (d.slots || []).map((s) => `<button type="button" class="${s.livre ? "livre" : "ocupado"}" ${s.livre ? "" : "disabled"} data-hora="${s.hora}">${s.hora} — ${s.livre ? "livre" : "ocupado"}</button>`).join("");
+  escolha.localId = $("localId").value || "online";
+  const d = await api(`/api/disponibilidade?profissional=${escolha.profissionalId}&data=${escolha.data}&local=${encodeURIComponent(escolha.localId)}`);
+  if (d.motivo) { $("slots").innerHTML = `<p>${d.motivo}</p>`; atualizarEscolha(); return; }
+  $("slots").innerHTML = (d.slots || []).map((s) => `<button type="button" class="${s.livre ? "livre" : "ocupado"}" ${s.livre ? "" : "disabled"} data-hora="${s.hora}">${s.hora} — ${s.livre ? "livre" : "ocupado"}</button>`).join("") || "<p>Sem atendimento neste dia neste local. Escolha outro dia ou outro local.</p>";
   document.querySelectorAll(".slots button.livre").forEach((b) => b.onclick = () => { escolha.hora = b.dataset.hora; atualizarEscolha(); });
   atualizarEscolha();
 }
@@ -59,6 +86,7 @@ function atualizarEscolha() {
 }
 $("filtroEsp").onchange = renderProfissionais;
 $("selData").onchange = carregarSlots;
+$("localId").onchange = carregarSlots;
 
 $("btnEntender").onclick = async () => {
   const d = await api("/api/entender", "POST", { texto: $("textoLivre").value });
@@ -70,7 +98,7 @@ $("btnEntender").onclick = async () => {
 
 $("formAgendar").onsubmit = async (e) => {
   e.preventDefault();
-  const d = await api("/api/agendar", "POST", { nome: $("nome").value, telefone: $("telefone").value, tipoConsulta: $("tipoConsulta").value, modalidade: $("modalidade").value, localId: $("localId").value, motivo: $("motivo").value, profissionalId: escolha.profissionalId, data: escolha.data, hora: escolha.hora, canal: "site" });
+  const d = await api("/api/agendar", "POST", { nome: $("nome").value, telefone: $("telefone").value, tipoConsulta: $("tipoConsulta").value, localId: $("localId").value, motivo: $("motivo").value, profissionalId: escolha.profissionalId, data: escolha.data, hora: escolha.hora, canal: "site" });
   if (!d.ok) { $("resultadoAgendar").textContent = d.erro; return; }
   const prof = profissionais.find((p) => p.id === d.agendamento.profissionalId);
   ultimoTextoConfirmacao = `Agendamento confirmado com ${prof.nome}, dia ${d.agendamento.data}, às ${d.agendamento.hora}. Seu código é ${d.agendamento.codigo}.`;
@@ -78,7 +106,7 @@ $("formAgendar").onsubmit = async (e) => {
   carregarSlots();
 };
 $("btnEspera").onclick = async () => {
-  const d = await api("/api/lista-espera", "POST", { nome: $("nome").value, telefone: $("telefone").value, profissionalId: escolha.profissionalId, data: escolha.data, hora: escolha.hora });
+  const d = await api("/api/lista-espera", "POST", { nome: $("nome").value, telefone: $("telefone").value, profissionalId: escolha.profissionalId, data: escolha.data, hora: escolha.hora, localId: $("localId").value });
   $("resultadoAgendar").textContent = d.ok ? "Você entrou na lista de espera. Se esse horário liberar, você é avisado primeiro." : d.erro;
 };
 $("btnCalc").onclick = async () => {
@@ -105,18 +133,20 @@ window.acao = async (id, tipo) => {
   alert(d.ok ? (tipo === "cancelar" && d.vagaLiberadaPara ? "Cancelado. A vaga foi liberada para a primeira pessoa da lista de espera." : "Pronto!") : d.erro);
   $("btnBuscar").click();
 };
-async function carregarLembretes() {
+async function carregarLembretesProf() {
   const d = await api("/api/lembretes");
-  $("listaLembretes").innerHTML = (d.lembretes || []).map((a) => `<div class="item">${a.mensagem}</div>`).join("") || "<p>Nenhum lembrete para amanhã no momento.</p>";
+  if (!d.ok) { $("listaLembretesProf").innerHTML = `<p>${d.erro}</p>`; return; }
+  $("listaLembretesProf").innerHTML = (d.lembretes || []).map((a) => `<div class="item">${a.mensagem}</div>`).join("") || "<p>Nenhum lembrete para amanhã no momento.</p>";
 }
-$("btnProfCode").onclick = () => {
-  profCode = $("profCode").value;
-  sessionStorage.setItem("profCode", profCode);
-  alert(profCode ? "Código guardado nesta aba do navegador." : "Código limpo. Se o sistema exigir código, informe-o de novo.");
+$("btnVerLembretes").onclick = carregarLembretesProf;
+$("btnEnviarLembretes").onclick = async () => {
+  const d = await api("/api/lembretes/enviar", "POST", {});
+  if (!d.ok) { $("resultadoLembretes").textContent = d.erro; return; }
+  $("resultadoLembretes").textContent = (d.resultados || []).length ? (d.resultados || []).map((r) => `${r.nome}: ${r.enviado ? "enviado pelo WhatsApp" : "não enviado — " + r.motivo}`).join(" | ") : "Nenhum lembrete pendente para amanhã.";
 };
-if ($("profCode")) $("profCode").value = profCode;
 $("btnAgenda").onclick = async () => {
   const d = await api(`/api/agenda?profissional=${$("agendaProf").value}&data=${$("agendaData").value}`);
+  if (!d.ok) { $("listaAgenda").innerHTML = `<p>${d.erro}</p>`; return; }
   $("listaAgenda").innerHTML = (d.agenda || []).map((a) => {
     const meet = a.modalidade === "Online" ? (a.linkMeet ? `<br><a href="${a.linkMeet}" target="_blank" rel="noopener">Abrir Google Meet</a>` : `<br><button onclick="colarMeet(${a.id})">Colar link do Google Meet</button>`) : "";
     return `<div class="item"><strong>${a.hora} — ${a.nome}</strong> (${a.telefone}) — ${a.tipoConsulta || ""} — ${a.modalidade || ""} — ${a.status}<br>${a.motivo || ""}${meet}<br><button onclick="checkin(${a.id})">Check-in: chegou</button></div>`;
