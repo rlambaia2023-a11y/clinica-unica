@@ -1,0 +1,1 @@
+{"description":"Sistema próprio de agendamento para uma clínica, começando pela Gineco da Dra. Mayara Miranda. Sem dependências.","engines":{"node":">=22"},"name":"clinica-unica","private":true,"scripts":{"start":"node server.mjs"},"type":"module","version":"1.0.0"}

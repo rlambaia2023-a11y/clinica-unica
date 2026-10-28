@@ -1,0 +1,22 @@
+body{font-family:system-ui,Arial,sans-serif;margin:0;color:#1c2b2b;background:#f4f7f5;line-height:1.5}
+header,main,footer{max-width:900px;margin:auto;padding:16px}
+header h1{margin-bottom:0}
+.sub{color:#445}
+.aviso{background:#fff3cd;border:1px solid #e6c87a;padding:10px;border-radius:10px}
+nav{display:flex;gap:8px;max-width:900px;margin:auto;padding:0 16px;flex-wrap:wrap}
+nav button,.slots button,.form button,button{padding:12px 16px;border-radius:10px;border:1px solid #0f766e;background:#0f766e;color:#fff;cursor:pointer;font-size:16px}
+nav button.ativo{background:#134e4a}
+button[type=button]{background:#fff;color:#0f766e}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:12px 0}
+.card{border:1px solid #cbd5d1;background:#fff;padding:14px;border-radius:12px}
+.card.selecionado{outline:3px solid #0f766e}
+.slots{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.slots button.livre{background:#dcfce7;color:#14532d;border-color:#86efac}
+.slots button.ocupado{background:#eee;color:#777;border-color:#ccc;cursor:not-allowed}
+.form{display:grid;gap:10px;background:#fff;border:1px solid #cbd5d1;padding:16px;border-radius:12px;margin-top:16px}
+input,select,textarea{padding:12px;border-radius:10px;border:1px solid #94a3b8;font-size:16px;width:100%;box-sizing:border-box}
+.linha{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.linha input,.linha select{flex:1;min-width:200px}
+.resposta{background:#e0f2fe;padding:12px;border-radius:10px;white-space:pre-wrap}
+.escondido{display:none}
+.item{border:1px solid #cbd5d1;background:#fff;padding:12px;border-radius:10px;margin:8px 0}

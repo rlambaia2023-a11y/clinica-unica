@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gineco — Agendar consulta com a Dra. Mayara Miranda</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1 id="nomeClinica">Gineco</h1>
+  <p class="sub">Consultas ginecológicas e pré-natal com a Dra. Mayara Miranda. Agende em poucos passos, confirme em um toque e receba lembrete antes da consulta.</p>
+  <p class="aviso" id="avisoClinica"></p>
+  <p id="infoClinica"></p>
+</header>
+
+<nav aria-label="Seções">
+  <button data-aba="agendar" class="ativo">Agendar</button>
+  <button data-aba="meus">Minhas consultas</button>
+  <button data-aba="profissional">Área do profissional</button>
+</nav>
+
+<main>
+<section id="aba-agendar" class="aba">
+  <h2>Agendar falando ou digitando</h2>
+  <p>Exemplo: “quero pré-natal amanhã de manhã” ou “consulta ginecológica na sexta à tarde”.</p>
+  <div class="linha">
+    <input id="textoLivre" placeholder="Digite aqui o que você precisa..." aria-label="Pedido em linguagem natural">
+    <button id="btnEntender">Entender pedido</button>
+  </div>
+  <p id="respostaTexto" class="resposta"></p>
+
+  <h2>Ou escolha direto</h2>
+  <label>Especialidade
+    <select id="filtroEsp"><option value="">Todas</option></select>
+  </label>
+  <div id="listaProfissionais" class="cards"></div>
+
+  <h2>Locais de atendimento</h2>
+  <div id="listaLocais" class="cards"></div>
+
+  <label>Dia
+    <select id="selData"></select>
+  </label>
+  <div id="slots" class="slots"></div>
+
+  <h2>Calculadora gestacional</h2>
+  <p>Informe a data da última menstruação (DUM) para ver a idade gestacional e a data provável do parto. É só uma referência: a profissional confirma na consulta.</p>
+  <div class="linha">
+    <input type="date" id="dum" aria-label="Data da última menstruação">
+    <button id="btnCalc" type="button">Calcular</button>
+  </div>
+  <p id="resultadoCalc" class="resposta"></p>
+
+  <form id="formAgendar" class="form">
+    <h3>Seus dados</h3>
+    <input id="nome" placeholder="Seu nome completo" required>
+    <input id="telefone" placeholder="WhatsApp com DDD" required>
+    <select id="tipoConsulta" aria-label="Tipo de consulta"></select>
+    <select id="modalidade" aria-label="Modalidade da consulta"><option>Presencial</option><option>Online</option></select>
+    <select id="localId" aria-label="Local da consulta"></select>
+    <input id="motivo" placeholder="Motivo da consulta (opcional)">
+    <p>Profissional, dia e hora escolhidos: <strong id="escolha">nenhum ainda</strong></p>
+    <button type="submit">Confirmar agendamento</button>
+    <button type="button" id="btnEspera">Entrar na lista de espera deste horário</button>
+  </form>
+  <p id="resultadoAgendar" class="resposta"></p>
+  <button id="btnOuvir" type="button">Ouvir confirmação em voz alta</button>
+</section>
+
+<section id="aba-meus" class="aba escondido">
+  <h2>Minhas consultas</h2>
+  <div class="linha">
+    <input id="buscaTel" placeholder="Seu WhatsApp com DDD">
+    <button id="btnBuscar">Buscar</button>
+  </div>
+  <div id="listaMeus"></div>
+  <h3>Lembretes de amanhã</h3>
+  <div id="listaLembretes"></div>
+</section>
+
+<section id="aba-profissional" class="aba escondido">
+  <h2>Agenda do profissional</h2>
+  <p class="aviso">Esta área é só do profissional. Se o sistema foi iniciado com PROF_CODE, informe o código abaixo. Sem código definido, a área fica aberta em modo demonstração.</p>
+  <div class="linha">
+    <input type="password" id="profCode" placeholder="Código de acesso do profissional" aria-label="Código de acesso do profissional">
+    <button id="btnProfCode" type="button">Usar este código</button>
+  </div>
+  <div class="linha">
+    <select id="agendaProf"></select>
+    <input type="date" id="agendaData">
+    <button id="btnAgenda">Ver agenda</button>
+  </div>
+  <div id="listaAgenda"></div>
+  <h3>Nota da consulta com ajuda da IA</h3>
+  <p>A IA só organiza o relato. O profissional revisa e aprova antes de virar prontuário.</p>
+  <textarea id="textoConsulta" rows="4" placeholder="Relato da consulta..."></textarea>
+  <button id="btnNotaIA">Organizar com IA (só Gemini)</button>
+  <p id="resumoIA" class="resposta"></p>
+  <div class="linha">
+    <input id="notaAgId" placeholder="Número do agendamento">
+    <button id="btnSalvarNota">Salvar nota no prontuário</button>
+  </div>
+  <p id="resultadoNota" class="resposta"></p>
+</section>
+</main>
+<footer><p>Código próprio, em português. Nada aqui foi copiado do Doctoralia: só as funções foram analisadas e refeitas do zero. O Gineco-AI continua separado, com protocolos, calculadoras completas e busca inteligente; aqui fica a camada de agendamento da clínica.</p></footer>
+<script src="app.js"></script>
+</body>
+</html>

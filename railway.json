@@ -1,0 +1,1 @@
+{"build":{"builder":"DOCKERFILE"},"deploy":{"restartPolicyMaxRetries":10,"restartPolicyType":"ON_FAILURE"}}
