@@ -1,6 +1,6 @@
 # Clínica Única v1.2 — modo real — Gineco primeiro
 
-## Expansão fase 1 (2026-11-02, só local por enquanto, sem deploy)
+## Expansão fase 1 (2026-11-02, publicada e verificada ao vivo)
 
 Código próprio, sem copiar visual, marca ou banco de outro sistema.
 O que entrou, dentro da área do profissional logada:
@@ -23,7 +23,11 @@ O que entrou, dentro da área do profissional logada:
   Testado localmente em 2026-11-02: sem login dá 401, com login
   cria paciente, evolução, anamnese, procedimento, plano e
   receituário, e o agendamento cria a ficha sozinho. Tipo de
-  documento inválido é recusado. Deploy só depois da sua aprovação.
+  documento inválido é recusado. Deploy aprovado e verificado ao
+  vivo em 2026-11-02: health v1.2, 0 agendamentos, 0 pacientes,
+  0 prescrições e ainda sem conta profissional. Não foi criado
+  paciente nem conta de teste ao vivo, para não bloquear a
+  primeira conta da profissional.
 
 # Clínica Única v1.1 — modo real — Gineco primeiro
 
