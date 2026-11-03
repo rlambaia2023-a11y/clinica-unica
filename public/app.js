@@ -273,4 +273,64 @@ $("formTirzMovimentacao").onsubmit = async (e) => {
   $("resultadoTirzMov").textContent = d.ok ? `Movimentação salva. Estoque de ${d.estoque.dose}: ${d.estoque.quantidade}.` : d.erro;
   if (d.ok) $("btnTirzEstoque").click();
 };
+// Importação Tirz por CSV: parser próprio, sem dependência, com aspas,
+// vírgula dentro de aspas, aspas duplas escapadas e quebra de linha
+// dentro de campo. Só importa ao clicar em importar; o resultado mostra
+// contagens e erros, nunca nomes de pacientes.
+function tirzParseCsv(texto) {
+  const linhas = [];
+  let linha = [], campo = "", entreAspas = false;
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto[i];
+    if (entreAspas) {
+      if (c === '"') {
+        if (texto[i + 1] === '"') { campo += '"'; i++; } else entreAspas = false;
+      } else campo += c;
+    } else if (c === '"') entreAspas = true;
+    else if (c === ",") { linha.push(campo); campo = ""; }
+    else if (c === "\n") { linha.push(campo); linhas.push(linha); linha = []; campo = ""; }
+    else if (c !== "\r") campo += c;
+  }
+  if (campo !== "" || linha.length) { linha.push(campo); linhas.push(linha); }
+  const cab = (linhas.shift() || []).map((h) => h.trim());
+  return linhas.filter((l) => l.some((v) => String(v).trim() !== "")).map((l) => {
+    const o = {};
+    cab.forEach((h, i) => { o[h] = l[i] ?? ""; });
+    return o;
+  });
+}
+function tirzLerCsv(arquivo) {
+  return new Promise((resolve, reject) => {
+    if (!arquivo) { resolve([]); return; }
+    const leitor = new FileReader();
+    leitor.onload = () => { try { resolve(tirzParseCsv(String(leitor.result))); } catch (e) { reject(e); } };
+    leitor.onerror = () => reject(new Error("Não foi possível ler o arquivo."));
+    leitor.readAsText(arquivo);
+  });
+}
+$("formTirzImportar").onsubmit = async (e) => {
+  e.preventDefault();
+  const resultado = $("resultadoTirzImportar");
+  resultado.textContent = "Lendo os CSVs...";
+  try {
+    const clientesCsv = await tirzLerCsv($("tirzCsvCliente").files[0]);
+    const estoqueCsv = await tirzLerCsv($("tirzCsvEstoque").files[0]);
+    const movCsv = await tirzLerCsv($("tirzCsvMovimentacao").files[0]);
+    const pesosCsv = await tirzLerCsv($("tirzCsvPeso").files[0]);
+    const fotosCsv = await tirzLerCsv($("tirzCsvFoto").files[0]);
+    const payload = {
+      clientes: clientesCsv.map((r) => ({ base44Id: r.id, nome: r.nome, cpf: r.cpf, data_nascimento: r.data_nascimento, telefone: r.telefone, email: r.email, dose: r.dose, dose_inicial: r.dose_inicial, dose_final: r.dose_final, tipo_venda: r.tipo_venda, peso_inicial: r.peso_inicial, peso_final: r.peso_final, valor_mensalidade: r.valor_mensalidade, data_atendimento: r.data_atendimento, proxima_aplicacao: r.proxima_aplicacao, data_vencimento: r.data_vencimento, status_pagamento: r.status_pagamento, ativo: r.ativo, lembrete_ativo: r.lembrete_ativo, observacoes: r.observacoes })),
+      estoque: estoqueCsv.map((r) => ({ base44Id: r.id, dose: r.dose, quantidade: r.quantidade })),
+      movimentacoes: movCsv.map((r) => ({ base44Id: r.id, cliente_id: r.cliente_id, cliente_nome: r.cliente_nome, dose: r.dose, tipo: r.tipo, quantidade: r.quantidade, motivo: r.motivo, observacao: r.observacao })),
+      pesos: pesosCsv.map((r) => ({ base44Id: r.id, cliente_id: r.cliente_id, data: r.data, peso: r.peso, observacao: r.observacao })),
+      fotos: fotosCsv.map((r) => ({ base44Id: r.id, cliente_id: r.cliente_id, semana: r.semana, nome_foto: r.nome_foto, legenda: r.legenda, foto_url: r.foto_url, data_envio: r.data_envio })),
+    };
+    const d = await api("/api/tirz/importar", "POST", payload);
+    if (!d.ok) { resultado.textContent = d.erro; return; }
+    resultado.textContent = `Importação concluída. Clientes: ${d.clientes} · Estoque: ${d.estoque} · Movimentações: ${d.movimentacoes} · Pesos: ${d.pesos} · Fotos: ${d.fotos}${d.backup ? ` · Backup: ${d.backup}` : ""}.`;
+    carregarTirzClientes();
+  } catch (err) {
+    resultado.textContent = "Não foi possível ler um dos CSVs. Confira o arquivo e tente de novo.";
+  }
+};
 carregar();

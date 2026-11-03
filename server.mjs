@@ -1,4 +1,6 @@
-// Clínica Única v1.3 — modo real, Gineco primeiro + módulo Tirzepatida.
+// Clínica Única v1.4 — modo real, Gineco primeiro + módulo Tirzepatida.
+// v1.4 acrescenta a importação Tirzepatida pela página (POST /api/tirz/importar),
+// só para a profissional logada, com backup antes de gravar. Ainda sem deploy.
 // Módulo Tirzepatida (código próprio, sem copiar o Base44): coleções
 // tirz* separadas dos pacientes da Gineco, só para a profissional logada.
 // Os clientes Tirz não viram pacientes da Gineco; o link pacienteId só
@@ -372,7 +374,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   const rota = url.pathname;
 
-  if (rota === "/api/health") return enviar(res, 200, { ok: true, servico: "clinica-unica", versao: "v1.3", modo: "real", ia_configurada: Boolean(process.env.GEMINI_API_KEY), modelo_ia: MODELO_IA, cache_ia: cacheIA.size, agendamentos: db.agendamentos.length, pacientes: (db.pacientes || []).length, prescricoes: (db.prescricoes || []).length, tiposPrescricao: TIPOS_PRESCRICAO, area_profissional_protegida: true, login_profissional_tem_conta: db.usuariosProfissionais.length > 0, whatsapp_provedor: process.env.WHATSAPP_PROVIDER || "nao_configurado", tirz: { clientes: (db.tirzClientes || []).length, estoque: (db.tirzEstoque || []).length, movimentacoes: (db.tirzMovimentacoes || []).length, pesos: (db.tirzPesos || []).length, fotos: (db.tirzFotos || []).length } });
+  if (rota === "/api/health") return enviar(res, 200, { ok: true, servico: "clinica-unica", versao: "v1.4", modo: "real", ia_configurada: Boolean(process.env.GEMINI_API_KEY), modelo_ia: MODELO_IA, cache_ia: cacheIA.size, agendamentos: db.agendamentos.length, pacientes: (db.pacientes || []).length, prescricoes: (db.prescricoes || []).length, tiposPrescricao: TIPOS_PRESCRICAO, area_profissional_protegida: true, login_profissional_tem_conta: db.usuariosProfissionais.length > 0, whatsapp_provedor: process.env.WHATSAPP_PROVIDER || "nao_configurado", tirz: { clientes: (db.tirzClientes || []).length, estoque: (db.tirzEstoque || []).length, movimentacoes: (db.tirzMovimentacoes || []).length, pesos: (db.tirzPesos || []).length, fotos: (db.tirzFotos || []).length } });
   if (rota === "/api/clinica") {
     const { whatsappInterno, ...clinicaPublica } = db.clinica;
     return enviar(res, 200, { clinica: clinicaPublica, profissionais: db.profissionais, especialidades: [...new Set(db.profissionais.map((p) => p.especialidade))], tiposConsulta: db.tiposConsulta || [], duracaoMinutos: (db.configHorarios && db.configHorarios.duracaoMinutos) || 60 });
@@ -724,6 +726,87 @@ const server = http.createServer(async (req, res) => {
     db.tirzMovimentacoes.push(m); salvar();
     return enviar(res, 201, { ok: true, movimentacao: m, estoque: item });
   }
+  // ---- Importação Tirzepatida (JSON montado a partir dos CSVs), só profissional logada ----
+  // Mesmas regras do script local scripts/import-tirz.mjs: clientes primeiro,
+  // idempotente por base44Id (clientes, movimentações, pesos e fotos) e por
+  // dose (estoque); movimentações importadas são histórico e NÃO alteram o
+  // estoque; fotos guardam só a referência foto_url, sem baixar foto; não
+  // importa created_by nem created_by_id; um campo usuarios, se vier, é só
+  // contado como ignorado, nunca como paciente; clientes Tirz continuam
+  // separados dos pacientes da Gineco. Antes de gravar, faz backup de
+  // DATA_FILE para DATA_FILE.bak-<carimbo>, só se o arquivo existir.
+  // Corpo inválido é rejeitado sem gravar nada. A resposta traz só
+  // contagens e o nome do backup, sem dados de paciente.
+  if (rota === "/api/tirz/importar" && req.method === "POST") {
+    if (!profOk(req, res)) return;
+    const b = await lerCorpo(req);
+    const conjuntos = ["clientes", "estoque", "movimentacoes", "pesos", "fotos", "usuarios"];
+    if (!b || typeof b !== "object" || Array.isArray(b)) return enviar(res, 400, { ok: false, erro: "Envie um objeto JSON com os conjuntos clientes, estoque, movimentacoes, pesos e fotos. Nada foi importado." });
+    for (const chave of conjuntos) {
+      if (b[chave] !== undefined && !Array.isArray(b[chave])) return enviar(res, 400, { ok: false, erro: `O conjunto ${chave} precisa ser uma lista. Nada foi importado.` });
+    }
+    if (!conjuntos.slice(0, 5).some((chave) => Array.isArray(b[chave]))) return enviar(res, 400, { ok: false, erro: "Envie pelo menos um conjunto para importar. Nada foi importado." });
+    for (const chave of conjuntos.slice(0, 5)) {
+      for (const item of b[chave] || []) {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return enviar(res, 400, { ok: false, erro: `Um item de ${chave} não é um objeto válido. Nada foi importado.` });
+      }
+    }
+    let backup = null;
+    if (fs.existsSync(DATA_FILE)) {
+      const carimbo = new Date().toISOString().replace(/[:.]/g, "-");
+      backup = `dados.json.bak-${carimbo}`;
+      fs.copyFileSync(DATA_FILE, path.join(DATA_DIR, backup));
+    }
+    if (!db.contador) db.contador = 1;
+    const mapaCliente = new Map();
+    for (const c of db.tirzClientes || []) {
+      if (c.base44Id !== null && c.base44Id !== undefined && c.base44Id !== "") mapaCliente.set(String(c.base44Id), c.id);
+    }
+    const base44IdDe = (r) => (r.base44Id !== undefined && r.base44Id !== null && r.base44Id !== "" ? String(r.base44Id) : null);
+    for (const r of b.clientes || []) {
+      const base44Id = base44IdDe(r);
+      const dados = {
+        base44Id, nome: r.nome || "", cpf: r.cpf || "", data_nascimento: r.data_nascimento || "", telefone: r.telefone || "", email: r.email || "",
+        dose: r.dose || "", dose_inicial: r.dose_inicial || "", dose_final: r.dose_final || "", tipo_venda: r.tipo_venda || "",
+        peso_inicial: tirzNumero(r.peso_inicial), peso_final: tirzNumero(r.peso_final), valor_mensalidade: tirzNumero(r.valor_mensalidade),
+        data_atendimento: r.data_atendimento || "", proxima_aplicacao: r.proxima_aplicacao || "", data_vencimento: r.data_vencimento || "",
+        status_pagamento: r.status_pagamento || "pendente", ativo: tirzBool(r.ativo), lembrete_ativo: tirzBool(r.lembrete_ativo), observacoes: r.observacoes || "",
+      };
+      const existente = base44Id ? (db.tirzClientes || []).find((c) => c.base44Id !== null && String(c.base44Id) === base44Id) : null;
+      if (existente) { Object.assign(existente, dados, { pacienteId: tirzPacienteIdPorTelefone(r.telefone) }); mapaCliente.set(base44Id, existente.id); }
+      else { const c = { id: db.contador++, pacienteId: tirzPacienteIdPorTelefone(r.telefone), ...dados, criadoEm: new Date().toISOString() }; db.tirzClientes.push(c); if (base44Id) mapaCliente.set(base44Id, c.id); }
+    }
+    for (const r of b.estoque || []) {
+      if (!r.dose) continue;
+      const existente = (db.tirzEstoque || []).find((e) => e.dose === r.dose);
+      if (existente) { existente.quantidade = tirzNumero(r.quantidade) ?? 0; if (r.base44Id) existente.base44Id = String(r.base44Id); }
+      else db.tirzEstoque.push({ id: db.contador++, base44Id: r.base44Id ? String(r.base44Id) : null, dose: r.dose, quantidade: tirzNumero(r.quantidade) ?? 0, doses_por_caixa: 4, alerta_minimo: 3, criadoEm: new Date().toISOString() });
+    }
+    for (const r of b.movimentacoes || []) {
+      const base44Id = base44IdDe(r);
+      const dados = {
+        base44Id, tirzClienteId: r.cliente_id ? (mapaCliente.get(String(r.cliente_id)) || null) : null, cliente_id: r.cliente_id ? String(r.cliente_id) : null,
+        cliente_nome: r.cliente_nome || "", dose: r.dose || "", tipo: r.tipo || "", quantidade: tirzNumero(r.quantidade), motivo: r.motivo || "", observacao: r.observacao || "",
+      };
+      const existente = base44Id ? (db.tirzMovimentacoes || []).find((m) => m.base44Id !== null && String(m.base44Id) === base44Id) : null;
+      if (existente) Object.assign(existente, dados); else db.tirzMovimentacoes.push({ id: db.contador++, ...dados, criadoEm: new Date().toISOString() });
+    }
+    for (const r of b.pesos || []) {
+      const base44Id = base44IdDe(r);
+      const dados = { base44Id, tirzClienteId: r.cliente_id ? (mapaCliente.get(String(r.cliente_id)) || null) : null, data: r.data || "", peso: tirzNumero(r.peso), observacao: r.observacao || "" };
+      const existente = base44Id ? (db.tirzPesos || []).find((p) => p.base44Id !== null && String(p.base44Id) === base44Id) : null;
+      if (existente) Object.assign(existente, dados); else db.tirzPesos.push({ id: db.contador++, ...dados, criadoEm: new Date().toISOString() });
+    }
+    for (const r of b.fotos || []) {
+      const base44Id = base44IdDe(r);
+      const dados = { base44Id, tirzClienteId: r.cliente_id ? (mapaCliente.get(String(r.cliente_id)) || null) : null, semana: r.semana || "", nome_foto: r.nome_foto || "", legenda: r.legenda || "", foto_url: r.foto_url || "", data_envio: r.data_envio || "" };
+      const existente = base44Id ? (db.tirzFotos || []).find((f) => f.base44Id !== null && String(f.base44Id) === base44Id) : null;
+      if (existente) Object.assign(existente, dados); else db.tirzFotos.push({ id: db.contador++, ...dados, criadoEm: new Date().toISOString() });
+    }
+    const usuariosIgnorados = Array.isArray(b.usuarios) ? b.usuarios.length : 0;
+    salvar();
+    return enviar(res, 200, { ok: true, backup, clientes: (db.tirzClientes || []).length, estoque: (db.tirzEstoque || []).length, movimentacoes: (db.tirzMovimentacoes || []).length, pesos: (db.tirzPesos || []).length, fotos: (db.tirzFotos || []).length, usuariosIgnorados });
+  }
 
   // Arquivos estáticos
   let file = path.join(PUBLIC_DIR, rota === "/" ? "index.html" : rota);
@@ -732,4 +815,4 @@ const server = http.createServer(async (req, res) => {
   fs.createReadStream(file).pipe(res);
 });
 
-server.listen(PORT, () => console.log(`Clínica Única v1.3 em http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`Clínica Única v1.4 em http://localhost:${PORT}`));

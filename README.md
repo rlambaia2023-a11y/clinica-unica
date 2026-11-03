@@ -1,3 +1,15 @@
+# Clínica Única v1.4 — modo real — importação Tirzepatida pela página (ainda sem deploy, sem push)
+
+Código próprio, sem copiar código do Base44. Nada desta versão foi publicado: sem deploy na Railway e sem push no GitHub. O deploy só acontece com aprovação da profissional.
+
+O que entrou, dentro da seção Tirzepatida na aba Área do profissional, só para a profissional logada:
+
+- Rota `POST /api/tirz/importar`, só com login. Aceita JSON `{clientes, estoque, movimentacoes, pesos, fotos, usuarios}`. Idempotente por `base44Id` (clientes, movimentações, pesos e fotos) e por dose (estoque): rodar de novo atualiza, não duplica. Clientes primeiro, com mapeamento de `cliente_id` do Base44 para `tirzClienteId` nas movimentações, pesos e fotos. Movimentações importadas são histórico e não alteram a quantidade do estoque. Fotos guardam só a referência `foto_url`, sem baixar foto. Não importa `created_by` nem `created_by_id`; um campo `usuarios`, se vier, é só contado como ignorado, nunca como paciente. Clientes Tirz continuam separados dos pacientes da Gineco, com `pacienteId` só quando o telefone bate exatamente com um paciente existente. Antes de gravar, o servidor faz backup de `dados.json` para `dados.json.bak-<carimbo>` no mesmo diretório, só se o arquivo existir. Corpo inválido (não objeto, ou conjunto que não é lista, ou item que não é objeto) é rejeitado sem gravar nada. Retorna só contagens e o nome do backup, sem dados de paciente.
+- Formulário "Importar CSVs do TirzTracker" na seção Tirzepatida, com 5 campos de arquivo (Cliente, Estoque, MovimentacaoEstoque, HistoricoPeso, FotoEvolucao). Parser CSV próprio no navegador, com aspas, vírgulas dentro de aspas, aspas duplas escapadas e quebra de linha dentro de campo. Nada importa sozinho ao abrir a página; o resultado mostra só contagens e erros, sem nomes de pacientes.
+- `GET /api/health` passou para v1.4 e continua mostrando só as contagens Tirz, sem dados de paciente.
+
+Pendente para a importação ao vivo rodar: publicar a v1.4 na Railway com aprovação, criar a conta profissional ao vivo (só a profissional cria, sem senha no chat) e, já logada, escolher os 5 CSVs no formulário e importar, conferindo as contagens ao vivo. Nenhum teste com conta ou paciente foi feito ao vivo nesta versão.
+
 # Clínica Única v1.3 — modo real — Gineco + módulo Tirzepatida (ainda sem deploy)
 
 Código próprio, sem copiar código, visual ou banco do Base44. As funções
@@ -276,3 +288,8 @@ fbbrmuseia.
   `GET /api/tirz/estoque`, `GET /api/tirz/relatorios`,
   `POST /api/tirz/clientes`, `POST /api/tirz/pesos`,
   `POST /api/tirz/movimentacoes`
+- Tirzepatida (v1.4, só com login): `POST /api/tirz/importar`
+  (JSON com clientes, estoque, movimentacoes, pesos, fotos e
+  usuarios ignorados; idempotente por `base44Id` e por dose, com
+  backup antes de gravar) e formulário de importação dos 5 CSVs
+  na seção Tirzepatida da área do profissional

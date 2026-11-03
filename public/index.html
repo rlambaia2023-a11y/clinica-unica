@@ -187,6 +187,17 @@
   <div id="listaTirzResumo"></div>
   <div id="listaTirzEstoque"></div>
   <div id="listaTirzRelatorios"></div>
+  <form id="formTirzImportar" class="form">
+    <h3>Importar CSVs do TirzTracker</h3>
+    <p>Escolha os 5 CSVs exportados do TirzTracker. Nada é importado sozinho ao abrir a página: só depois de clicar em importar. Antes de gravar, o servidor faz um backup do banco. O resultado mostra só contagens e erros, sem nomes de pacientes.</p>
+    <label>Cliente <input id="tirzCsvCliente" type="file" accept=".csv,text/csv" aria-label="CSV de clientes"></label>
+    <label>Estoque <input id="tirzCsvEstoque" type="file" accept=".csv,text/csv" aria-label="CSV de estoque"></label>
+    <label>Movimentação de estoque <input id="tirzCsvMovimentacao" type="file" accept=".csv,text/csv" aria-label="CSV de movimentações de estoque"></label>
+    <label>Histórico de peso <input id="tirzCsvPeso" type="file" accept=".csv,text/csv" aria-label="CSV de histórico de peso"></label>
+    <label>Foto de evolução <input id="tirzCsvFoto" type="file" accept=".csv,text/csv" aria-label="CSV de fotos de evolução"></label>
+    <button type="submit">Importar CSVs</button>
+  </form>
+  <p id="resultadoTirzImportar" class="resposta"></p>
   <h3>Clientes Tirzepatida</h3>
   <div class="linha">
     <input id="tirzBusca" placeholder="Buscar por nome ou telefone">
