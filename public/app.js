@@ -220,4 +220,57 @@ $("formPrescrever").onsubmit = async (e) => {
   if (d.ok) carregarPrescricoes();
 };
 $("prescPaciente").onchange = carregarPrescricoes;
+
+// ---- Módulo Tirzepatida, só dentro da área do profissional ----
+function tirzEsc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+$("btnTirzResumo").onclick = async () => {
+  const d = await api("/api/tirz/resumo");
+  if (!d.ok) { $("listaTirzResumo").innerHTML = `<p>${tirzEsc(d.erro)}</p>`; return; }
+  const r = d.resumo;
+  $("listaTirzResumo").innerHTML = `<p>Clientes: ${r.totalClientes} · Ativos: ${r.clientesAtivos} · Pagamento pendente: ${r.pagamentoPendente} · Pago: ${r.pagamentoPago} · Movimentações: ${r.totalMovimentacoes} · Pesos: ${r.totalPesos} · Fotos: ${r.totalFotos}</p><p>Estoque baixo (quantidade até 3): ${(r.estoqueBaixo || []).map((e) => `${tirzEsc(e.dose)}: ${e.quantidade}`).join(", ") || "nenhum"}</p><p>Próximas aplicações em 30 dias: ${r.proximasAplicacoes.length} · Vencimentos em 30 dias: ${r.vencimentosProximos.length}</p>`;
+};
+$("btnTirzEstoque").onclick = async () => {
+  const d = await api("/api/tirz/estoque");
+  if (!d.ok) { $("listaTirzEstoque").innerHTML = `<p>${tirzEsc(d.erro)}</p>`; return; }
+  $("listaTirzEstoque").innerHTML = (d.estoque || []).map((e) => `<div class="item"><strong>${tirzEsc(e.dose)}</strong> — ${e.quantidade} dose(s)${e.estoqueBaixo ? " — <strong>estoque baixo</strong>" : ""}</div>`).join("") || "<p>Sem estoque cadastrado.</p>";
+};
+$("btnTirzRelatorios").onclick = async () => {
+  const d = await api("/api/tirz/relatorios");
+  if (!d.ok) { $("listaTirzRelatorios").innerHTML = `<p>${tirzEsc(d.erro)}</p>`; return; }
+  const r = d.relatorio;
+  $("listaTirzRelatorios").innerHTML = `<p>Clientes: ${r.totalClientes} · Ativos: ${r.clientesAtivos} · Pendente: ${r.pagamentoPendente} · Pago: ${r.pagamentoPago}</p><p>Mensalidades ativas: R$ ${Number(r.mensalidadesAtivas || 0).toFixed(2).replace(".", ",")}</p><p>${tirzEsc(r.avisoMensalidades)}</p><p>Por dose: ${Object.entries(r.porDose || {}).map(([k, v]) => `${tirzEsc(k)}: ${v}`).join(", ") || "—"}</p><p>Movimentações: ${r.totalMovimentacoes} · Entradas: ${r.entradas} · Saídas: ${r.saidas}</p>`;
+};
+async function carregarTirzClientes() {
+  const q = new URLSearchParams({ busca: $("tirzBusca").value || "", status: $("tirzStatus").value || "", dose: $("tirzDose").value || "" }).toString();
+  const d = await api(`/api/tirz/clientes?${q}`);
+  if (!d.ok) { $("listaTirzClientes").innerHTML = `<p>${tirzEsc(d.erro)}</p>`; return; }
+  $("listaTirzClientes").innerHTML = (d.clientes || []).map((c) => `<div class="item"><strong>${tirzEsc(c.nome)}</strong> — ${tirzEsc(c.telefone)} — dose: ${tirzEsc(c.dose_final || c.dose || "—")} — ${tirzEsc(c.status_pagamento || "—")} — próxima aplicação: ${tirzEsc(c.proxima_aplicacao || "—")}<br><button onclick="abrirTirzCliente(${c.id})">Abrir detalhe</button></div>`).join("") || "<p>Nenhum cliente Tirzepatida encontrado.</p>";
+}
+$("btnBuscarTirz").onclick = carregarTirzClientes;
+window.abrirTirzCliente = async (id) => {
+  const d = await api(`/api/tirz/clientes/${id}`);
+  if (!d.ok) { alert(d.erro); return; }
+  const c = d.cliente;
+  $("detalheTirzCliente").innerHTML = `<h3>${tirzEsc(c.nome)}</h3><p>Telefone: ${tirzEsc(c.telefone)} · E-mail: ${tirzEsc(c.email || "—")} · CPF: ${tirzEsc(c.cpf || "—")} · Nascimento: ${tirzEsc(c.data_nascimento || "—")}<br>Dose inicial: ${tirzEsc(c.dose_inicial || "—")} · Dose atual: ${tirzEsc(c.dose_final || c.dose || "—")} · Peso inicial: ${c.peso_inicial ?? "—"} · Peso atual: ${c.peso_final ?? "—"}<br>Mensalidade: ${c.valor_mensalidade ?? "—"} · Atendimento: ${tirzEsc(c.data_atendimento || "—")} · Próxima aplicação: ${tirzEsc(c.proxima_aplicacao || "—")} · Vencimento: ${tirzEsc(c.data_vencimento || "—")} · Pagamento: ${tirzEsc(c.status_pagamento || "—")}<br>${tirzEsc(c.observacoes || "")}</p>` +
+    `<h4>Pesos</h4>` + ((d.pesos || []).map((p) => `<div class="item">${tirzEsc(p.data)} — ${p.peso} kg${p.observacao ? " — " + tirzEsc(p.observacao) : ""}</div>`).join("") || "<p>Nenhum peso registrado.</p>") +
+    `<h4>Movimentações</h4>` + ((d.movimentacoes || []).map((m) => `<div class="item">${tirzEsc(m.tipo)} — ${tirzEsc(m.dose)} — ${m.quantidade} — ${tirzEsc(m.motivo || "")}</div>`).join("") || "<p>Nenhuma movimentação deste cliente.</p>") +
+    `<h4>Fotos</h4>` + ((d.fotos || []).map((f) => `<div class="item">${tirzEsc(f.semana || "")} — ${tirzEsc(f.nome_foto || "")} — referência: ${tirzEsc(f.foto_url || "")} — ${tirzEsc(f.data_envio || "")}</div>`).join("") || "<p>Nenhuma foto registrada.</p>");
+};
+$("formTirzCliente").onsubmit = async (e) => {
+  e.preventDefault();
+  const d = await api("/api/tirz/clientes", "POST", { nome: $("tirzNome").value, telefone: $("tirzTelefone").value, cpf: $("tirzCpf").value, email: $("tirzEmail").value, dose_final: $("tirzDoseFinal").value, dose: $("tirzDoseFinal").value, proxima_aplicacao: $("tirzProxima").value, data_vencimento: $("tirzVencimento").value, valor_mensalidade: $("tirzMensalidade").value ? Number($("tirzMensalidade").value) : null });
+  $("resultadoTirzCliente").textContent = d.ok ? "Cliente Tirzepatida salvo." : d.erro;
+  if (d.ok) carregarTirzClientes();
+};
+$("formTirzPeso").onsubmit = async (e) => {
+  e.preventDefault();
+  const d = await api("/api/tirz/pesos", "POST", { tirzClienteId: $("tirzPesoClienteId").value, data: $("tirzPesoData").value, peso: Number($("tirzPesoValor").value), observacao: $("tirzPesoObs").value });
+  $("resultadoTirzPeso").textContent = d.ok ? "Peso salvo." : d.erro;
+};
+$("formTirzMovimentacao").onsubmit = async (e) => {
+  e.preventDefault();
+  const d = await api("/api/tirz/movimentacoes", "POST", { dose: $("tirzMovDose").value, tipo: $("tirzMovTipo").value, quantidade: Number($("tirzMovQtd").value), tirzClienteId: $("tirzMovClienteId").value || null, motivo: $("tirzMovMotivo").value });
+  $("resultadoTirzMov").textContent = d.ok ? `Movimentação salva. Estoque de ${d.estoque.dose}: ${d.estoque.quantidade}.` : d.erro;
+  if (d.ok) $("btnTirzEstoque").click();
+};
 carregar();

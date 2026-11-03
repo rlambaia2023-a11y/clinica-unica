@@ -1,4 +1,8 @@
-// Clínica Única v1.1 — modo real, Gineco primeiro.
+// Clínica Única v1.3 — modo real, Gineco primeiro + módulo Tirzepatida.
+// Módulo Tirzepatida (código próprio, sem copiar o Base44): coleções
+// tirz* separadas dos pacientes da Gineco, só para a profissional logada.
+// Os clientes Tirz não viram pacientes da Gineco; o link pacienteId só
+// existe quando o telefone bate exatamente com um paciente já cadastrado.
 // Sistema próprio, código próprio, sem dependências.
 // Paciente agenda, confirma e vê suas consultas. A área do profissional
 // exige login com senha criptografada (scrypt) e sessão por cookie.
@@ -117,6 +121,14 @@ function seed() {
     procedimentos: [],
     planosTratamento: [],
     prescricoes: [],
+    // Módulo Tirzepatida, importado do TirzTracker (Base44) pelo script
+    // scripts/import-tirz.mjs. Coleções separadas, nunca misturadas com
+    // pacientes da Gineco. Foto: só a referência foto_url, sem baixar foto.
+    tirzClientes: [],
+    tirzEstoque: [],
+    tirzMovimentacoes: [],
+    tirzPesos: [],
+    tirzFotos: [],
     contador: 1,
   };
 }
@@ -155,9 +167,58 @@ function prontuarioDoPaciente(pacienteId) {
     prescricoes: (db.prescricoes || []).filter((r) => r.pacienteId === id).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)),
   };
 }
+// ---- Módulo Tirzepatida: helpers próprios, sem copiar o Base44 ----
+function tirzNumero(v) {
+  if (v === "" || v === null || v === undefined) return null;
+  const n = Number(String(v).replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
+function tirzBool(v) {
+  if (v === true || String(v).toLowerCase() === "true") return true;
+  if (v === false || String(v).toLowerCase() === "false") return false;
+  return null;
+}
+function tirzPacienteIdPorTelefone(telefone) {
+  const d = soDigitos(telefone);
+  if (!d) return null;
+  const p = (db.pacientes || []).find((x) => soDigitos(x.telefone) === d);
+  return p ? p.id : null;
+}
+function tirzLista(c) {
+  // Lista sem CPF completo e sem observações: só o necessário para achar
+  // o cliente na lista. CPF, nascimento e observações só no detalhe.
+  const { cpf, data_nascimento, observacoes, ...resto } = c;
+  void cpf; void data_nascimento; void observacoes;
+  return resto;
+}
+function tirzResumo() {
+  const clientes = db.tirzClientes || [];
+  const estoque = db.tirzEstoque || [];
+  const hoje = hojeSP(0);
+  const em30 = hojeSP(30);
+  const proximasAplicacoes = clientes.filter((c) => c.proxima_aplicacao && c.proxima_aplicacao >= hoje && c.proxima_aplicacao <= em30)
+    .sort((a, b) => a.proxima_aplicacao.localeCompare(b.proxima_aplicacao))
+    .slice(0, 20).map((c) => ({ id: c.id, data: c.proxima_aplicacao }));
+  const vencimentosProximos = clientes.filter((c) => c.data_vencimento && c.data_vencimento >= hoje && c.data_vencimento <= em30)
+    .sort((a, b) => a.data_vencimento.localeCompare(b.data_vencimento))
+    .slice(0, 20).map((c) => ({ id: c.id, data: c.data_vencimento }));
+  return {
+    totalClientes: clientes.length,
+    clientesAtivos: clientes.filter((c) => c.ativo === true).length,
+    pagamentoPendente: clientes.filter((c) => c.status_pagamento === "pendente").length,
+    pagamentoPago: clientes.filter((c) => c.status_pagamento === "pago").length,
+    estoqueTotal: estoque.length,
+    estoqueBaixo: estoque.filter((e) => (e.quantidade ?? 0) <= 3).map((e) => ({ dose: e.dose, quantidade: e.quantidade })),
+    totalMovimentacoes: (db.tirzMovimentacoes || []).length,
+    totalPesos: (db.tirzPesos || []).length,
+    totalFotos: (db.tirzFotos || []).length,
+    proximasAplicacoes,
+    vencimentosProximos,
+  };
+}
 function migrar(d) {
   let mudou = false;
-  for (const chave of ["pacientes", "evolucoes", "anamneses", "procedimentos", "planosTratamento", "prescricoes"]) {
+  for (const chave of ["agendamentos", "listaEspera", "prontuarios", "usuariosProfissionais", "pacientes", "evolucoes", "anamneses", "procedimentos", "planosTratamento", "prescricoes", "tirzClientes", "tirzEstoque", "tirzMovimentacoes", "tirzPesos", "tirzFotos"]) {
     if (!Array.isArray(d[chave])) { d[chave] = []; mudou = true; }
   }
   // Fichas a partir de agendamentos antigos: um paciente por telefone.
@@ -174,6 +235,9 @@ function migrar(d) {
       }
     }
   }
+  if (!d.clinica) { d.clinica = seed().clinica; mudou = true; }
+  if (!Array.isArray(d.profissionais)) { d.profissionais = seed().profissionais; mudou = true; }
+  if (!Array.isArray(d.tiposConsulta)) { d.tiposConsulta = seed().tiposConsulta; mudou = true; }
   if (!d.configHorarios) { d.configHorarios = CONFIG_HORARIOS_PADRAO; mudou = true; }
   if (!d.usuariosProfissionais) { d.usuariosProfissionais = []; mudou = true; }
   if (d.clinica && typeof d.clinica.aviso === "string" && d.clinica.aviso.startsWith("Demonstração")) {
@@ -308,7 +372,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   const rota = url.pathname;
 
-  if (rota === "/api/health") return enviar(res, 200, { ok: true, servico: "clinica-unica", versao: "v1.2", modo: "real", ia_configurada: Boolean(process.env.GEMINI_API_KEY), modelo_ia: MODELO_IA, cache_ia: cacheIA.size, agendamentos: db.agendamentos.length, pacientes: (db.pacientes || []).length, prescricoes: (db.prescricoes || []).length, tiposPrescricao: TIPOS_PRESCRICAO, area_profissional_protegida: true, login_profissional_tem_conta: db.usuariosProfissionais.length > 0, whatsapp_provedor: process.env.WHATSAPP_PROVIDER || "nao_configurado" });
+  if (rota === "/api/health") return enviar(res, 200, { ok: true, servico: "clinica-unica", versao: "v1.3", modo: "real", ia_configurada: Boolean(process.env.GEMINI_API_KEY), modelo_ia: MODELO_IA, cache_ia: cacheIA.size, agendamentos: db.agendamentos.length, pacientes: (db.pacientes || []).length, prescricoes: (db.prescricoes || []).length, tiposPrescricao: TIPOS_PRESCRICAO, area_profissional_protegida: true, login_profissional_tem_conta: db.usuariosProfissionais.length > 0, whatsapp_provedor: process.env.WHATSAPP_PROVIDER || "nao_configurado", tirz: { clientes: (db.tirzClientes || []).length, estoque: (db.tirzEstoque || []).length, movimentacoes: (db.tirzMovimentacoes || []).length, pesos: (db.tirzPesos || []).length, fotos: (db.tirzFotos || []).length } });
   if (rota === "/api/clinica") {
     const { whatsappInterno, ...clinicaPublica } = db.clinica;
     return enviar(res, 200, { clinica: clinicaPublica, profissionais: db.profissionais, especialidades: [...new Set(db.profissionais.map((p) => p.especialidade))], tiposConsulta: db.tiposConsulta || [], duracaoMinutos: (db.configHorarios && db.configHorarios.duracaoMinutos) || 60 });
@@ -559,6 +623,108 @@ const server = http.createServer(async (req, res) => {
     return enviar(res, 200, { ok: true, hoje, amanha, totalPacientes: (db.pacientes || []).length, hojeTotal: db.agendamentos.filter((a) => a.data === hoje).length, amanhaTotal: db.agendamentos.filter((a) => a.data === amanha).length, proximos });
   }
 
+  // ---- Módulo Tirzepatida: só profissional logada, coleção separada ----
+  if (rota === "/api/tirz/resumo" && req.method === "GET") {
+    if (!profOk(req, res)) return;
+    return enviar(res, 200, { ok: true, resumo: tirzResumo() });
+  }
+  if (rota === "/api/tirz/clientes" && req.method === "GET") {
+    if (!profOk(req, res)) return;
+    const busca = (url.searchParams.get("busca") || "").toLowerCase();
+    const status = url.searchParams.get("status") || "";
+    const dose = url.searchParams.get("dose") || "";
+    const lista = (db.tirzClientes || []).filter((c) =>
+      (!busca || c.nome.toLowerCase().includes(busca) || soDigitos(c.telefone).includes(soDigitos(busca))) &&
+      (!status || c.status_pagamento === status) &&
+      (!dose || c.dose === dose || c.dose_final === dose)
+    ).sort((a, b) => a.nome.localeCompare(b.nome)).map(tirzLista);
+    return enviar(res, 200, { ok: true, clientes: lista, total: lista.length });
+  }
+  const mTirzCliente = rota.match(/^\/api\/tirz\/clientes\/(\d+)$/);
+  if (mTirzCliente && req.method === "GET") {
+    if (!profOk(req, res)) return;
+    const c = (db.tirzClientes || []).find((x) => x.id === Number(mTirzCliente[1]));
+    if (!c) return enviar(res, 404, { ok: false, erro: "Cliente Tirzepatida não encontrado." });
+    return enviar(res, 200, {
+      ok: true, cliente: c,
+      pesos: (db.tirzPesos || []).filter((p) => p.tirzClienteId === c.id).sort((a, b) => (b.data || "").localeCompare(a.data || "")),
+      movimentacoes: (db.tirzMovimentacoes || []).filter((m) => m.tirzClienteId === c.id).sort((a, b) => (b.criadoEm || "").localeCompare(a.criadoEm || "")),
+      fotos: (db.tirzFotos || []).filter((f) => f.tirzClienteId === c.id).sort((a, b) => (b.data_envio || "").localeCompare(a.data_envio || "")),
+    });
+  }
+  if (rota === "/api/tirz/estoque" && req.method === "GET") {
+    if (!profOk(req, res)) return;
+    const lista = (db.tirzEstoque || []).map((e) => ({ ...e, estoqueBaixo: (e.quantidade ?? 0) <= 3 }));
+    return enviar(res, 200, { ok: true, estoque: lista });
+  }
+  if (rota === "/api/tirz/relatorios" && req.method === "GET") {
+    if (!profOk(req, res)) return;
+    const clientes = db.tirzClientes || [];
+    const ativos = clientes.filter((c) => c.ativo === true);
+    const somaMensalidadesAtivas = ativos.reduce((s, c) => s + (tirzNumero(c.valor_mensalidade) || 0), 0);
+    const porDose = {};
+    for (const c of clientes) { const d = c.dose_final || c.dose || "não informada"; porDose[d] = (porDose[d] || 0) + 1; }
+    return enviar(res, 200, {
+      ok: true, relatorio: {
+        totalClientes: clientes.length, clientesAtivos: ativos.length,
+        pagamentoPendente: clientes.filter((c) => c.status_pagamento === "pendente").length,
+        pagamentoPago: clientes.filter((c) => c.status_pagamento === "pago").length,
+        mensalidadesAtivas: somaMensalidadesAtivas,
+        avisoMensalidades: "Soma de valor_mensalidade apenas de clientes ativos. Não é receita paga: a entidade Pagamento estava zerada no Base44.",
+        porDose,
+        totalMovimentacoes: (db.tirzMovimentacoes || []).length,
+        entradas: (db.tirzMovimentacoes || []).filter((m) => m.tipo === "entrada").reduce((s, m) => s + (tirzNumero(m.quantidade) || 0), 0),
+        saidas: (db.tirzMovimentacoes || []).filter((m) => m.tipo === "saida").reduce((s, m) => s + (tirzNumero(m.quantidade) || 0), 0),
+      },
+    });
+  }
+  if (rota === "/api/tirz/clientes" && req.method === "POST") {
+    if (!profOk(req, res)) return;
+    const b = await lerCorpo(req);
+    if (!b.nome || !b.telefone) return enviar(res, 400, { ok: false, erro: "Informe nome e telefone do cliente Tirzepatida." });
+    const c = {
+      id: db.contador++, base44Id: null, pacienteId: tirzPacienteIdPorTelefone(b.telefone),
+      nome: b.nome, cpf: b.cpf || "", data_nascimento: b.data_nascimento || "", telefone: b.telefone, email: b.email || "",
+      dose: b.dose || "", dose_inicial: b.dose_inicial || "", dose_final: b.dose_final || "", tipo_venda: b.tipo_venda || "",
+      peso_inicial: tirzNumero(b.peso_inicial), peso_final: tirzNumero(b.peso_final), valor_mensalidade: tirzNumero(b.valor_mensalidade),
+      data_atendimento: b.data_atendimento || "", proxima_aplicacao: b.proxima_aplicacao || "", data_vencimento: b.data_vencimento || "",
+      status_pagamento: b.status_pagamento || "pendente", ativo: b.ativo === undefined ? true : Boolean(b.ativo),
+      lembrete_ativo: b.lembrete_ativo === undefined ? true : Boolean(b.lembrete_ativo), observacoes: b.observacoes || "",
+      criadoEm: new Date().toISOString(),
+    };
+    db.tirzClientes.push(c); salvar();
+    return enviar(res, 201, { ok: true, cliente: c });
+  }
+  if (rota === "/api/tirz/pesos" && req.method === "POST") {
+    if (!profOk(req, res)) return;
+    const b = await lerCorpo(req);
+    const cliente = (db.tirzClientes || []).find((c) => c.id === Number(b.tirzClienteId));
+    if (!cliente) return enviar(res, 404, { ok: false, erro: "Cliente Tirzepatida não encontrado." });
+    if (!b.data || tirzNumero(b.peso) === null) return enviar(res, 400, { ok: false, erro: "Informe a data e o peso em kg." });
+    const p = { id: db.contador++, base44Id: null, tirzClienteId: cliente.id, data: b.data, peso: tirzNumero(b.peso), observacao: b.observacao || "", criadoEm: new Date().toISOString() };
+    db.tirzPesos.push(p);
+    cliente.peso_final = p.peso;
+    salvar();
+    return enviar(res, 201, { ok: true, peso: p });
+  }
+  if (rota === "/api/tirz/movimentacoes" && req.method === "POST") {
+    if (!profOk(req, res)) return;
+    const b = await lerCorpo(req);
+    if (!b.dose || !["entrada", "saida"].includes(b.tipo) || tirzNumero(b.quantidade) === null || tirzNumero(b.quantidade) <= 0) return enviar(res, 400, { ok: false, erro: "Informe dose, tipo entrada ou saída, e quantidade maior que zero." });
+    let item = (db.tirzEstoque || []).find((e) => e.dose === b.dose);
+    if (!item) {
+      item = { id: db.contador++, base44Id: null, dose: b.dose, quantidade: 0, doses_por_caixa: 4, alerta_minimo: 3, criadoEm: new Date().toISOString() };
+      db.tirzEstoque.push(item);
+    }
+    const qtd = tirzNumero(b.quantidade);
+    if (b.tipo === "saida" && (item.quantidade ?? 0) - qtd < 0) return enviar(res, 400, { ok: false, erro: "Saída maior que o estoque disponível. O estoque não pode ficar negativo." });
+    item.quantidade = (item.quantidade ?? 0) + (b.tipo === "entrada" ? qtd : -qtd);
+    const cliente = b.tirzClienteId ? (db.tirzClientes || []).find((c) => c.id === Number(b.tirzClienteId)) : null;
+    const m = { id: db.contador++, base44Id: null, tirzClienteId: cliente?.id || null, cliente_id: b.cliente_id || cliente?.base44Id || null, cliente_nome: cliente?.nome || b.cliente_nome || "", dose: b.dose, tipo: b.tipo, quantidade: qtd, motivo: b.motivo || "", observacao: b.observacao || "", criadoEm: new Date().toISOString() };
+    db.tirzMovimentacoes.push(m); salvar();
+    return enviar(res, 201, { ok: true, movimentacao: m, estoque: item });
+  }
+
   // Arquivos estáticos
   let file = path.join(PUBLIC_DIR, rota === "/" ? "index.html" : rota);
   if (!file.startsWith(PUBLIC_DIR) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end("Não encontrado"); }
@@ -566,4 +732,4 @@ const server = http.createServer(async (req, res) => {
   fs.createReadStream(file).pipe(res);
 });
 
-server.listen(PORT, () => console.log(`Clínica Única v1.2 em http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`Clínica Única v1.3 em http://localhost:${PORT}`));

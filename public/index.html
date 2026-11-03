@@ -176,6 +176,58 @@
   </form>
   <p id="resultadoPrescrever" class="resposta"></p>
   <div id="listaPrescricoes"></div>
+
+  <h2>Tirzepatida</h2>
+  <p>Módulo importado do TirzTracker, só para a profissional logada. Os clientes Tirzepatida ficam numa lista separada dos pacientes da Gineco. Na lista não aparece CPF completo; o detalhe completo só abre aqui, na área do profissional.</p>
+  <div class="linha">
+    <button id="btnTirzResumo" type="button">Ver resumo Tirzepatida</button>
+    <button id="btnTirzEstoque" type="button">Ver estoque</button>
+    <button id="btnTirzRelatorios" type="button">Ver relatórios</button>
+  </div>
+  <div id="listaTirzResumo"></div>
+  <div id="listaTirzEstoque"></div>
+  <div id="listaTirzRelatorios"></div>
+  <h3>Clientes Tirzepatida</h3>
+  <div class="linha">
+    <input id="tirzBusca" placeholder="Buscar por nome ou telefone">
+    <select id="tirzStatus" aria-label="Filtro de pagamento"><option value="">Todos os pagamentos</option><option value="pendente">Pendente</option><option value="pago">Pago</option><option value="atrasado">Atrasado</option></select>
+    <input id="tirzDose" placeholder="Filtrar por dose (ex.: 2,5mg)">
+    <button id="btnBuscarTirz" type="button">Buscar</button>
+  </div>
+  <div id="listaTirzClientes"></div>
+  <div id="detalheTirzCliente"></div>
+  <form id="formTirzCliente" class="form">
+    <h3>Cadastrar cliente Tirzepatida</h3>
+    <input id="tirzNome" placeholder="Nome completo" required>
+    <input id="tirzTelefone" placeholder="WhatsApp com DDD" required>
+    <input id="tirzCpf" placeholder="CPF (só aparece no detalhe, na área do profissional)">
+    <input id="tirzEmail" type="email" placeholder="E-mail (opcional)">
+    <input id="tirzDoseFinal" placeholder="Dose atual (ex.: 2,5mg)">
+    <input id="tirzProxima" type="date" aria-label="Próxima aplicação">
+    <input id="tirzVencimento" type="date" aria-label="Vencimento da mensalidade">
+    <input id="tirzMensalidade" type="number" step="0.01" placeholder="Valor da mensalidade (opcional)">
+    <button type="submit">Salvar cliente Tirzepatida</button>
+  </form>
+  <p id="resultadoTirzCliente" class="resposta"></p>
+  <form id="formTirzPeso" class="form">
+    <h3>Registrar peso</h3>
+    <input id="tirzPesoClienteId" placeholder="Número do cliente Tirzepatida" required>
+    <input id="tirzPesoData" type="date" required aria-label="Data do peso">
+    <input id="tirzPesoValor" type="number" step="0.01" placeholder="Peso em kg" required>
+    <input id="tirzPesoObs" placeholder="Observação (opcional)">
+    <button type="submit">Salvar peso</button>
+  </form>
+  <p id="resultadoTirzPeso" class="resposta"></p>
+  <form id="formTirzMovimentacao" class="form">
+    <h3>Movimentar estoque</h3>
+    <input id="tirzMovDose" placeholder="Dose (ex.: 2,5mg)" required>
+    <select id="tirzMovTipo" aria-label="Tipo de movimentação"><option value="entrada">Entrada</option><option value="saida">Saída</option></select>
+    <input id="tirzMovQtd" type="number" step="1" placeholder="Quantidade" required>
+    <input id="tirzMovClienteId" placeholder="Número do cliente Tirzepatida (opcional, para saída)">
+    <input id="tirzMovMotivo" placeholder="Motivo (ex.: aplicacao_paciente, compra, ajuste)">
+    <button type="submit">Salvar movimentação</button>
+  </form>
+  <p id="resultadoTirzMov" class="resposta"></p>
 </section>
 </main>
 <footer><p>Código próprio, em português. Nada aqui foi copiado do Doctoralia: só as funções foram analisadas e refeitas do zero. O Gineco-AI continua separado, com protocolos, calculadoras completas e busca inteligente; aqui fica a camada de agendamento da clínica. Privacidade: dados de paciente ficam só na clínica, para agendamento e lembrete; prontuário só é visto pela profissional logada.</p></footer>

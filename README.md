@@ -1,3 +1,54 @@
+# Clínica Única v1.3 — modo real — Gineco + módulo Tirzepatida (ainda sem deploy)
+
+Código próprio, sem copiar código, visual ou banco do Base44. As funções
+do TirzTracker foram analisadas e refeitas do zero neste sistema.
+Nada desta versão foi publicado: sem deploy na Railway, sem push no
+GitHub e sem nenhuma variável nova. O deploy só acontece com aprovação
+da profissional.
+
+O que entrou, tudo dentro da aba Área do profissional, só para a
+profissional logada, nunca na área pública de agendamento:
+
+- Coleções separadas: `tirzClientes`, `tirzEstoque`, `tirzMovimentacoes`,
+  `tirzPesos` e `tirzFotos`. Os clientes Tirzepatida não viram pacientes
+  da Gineco; o campo `pacienteId` só é preenchido quando o telefone
+  bate exatamente com um paciente já cadastrado.
+- Importação: `node scripts/import-tirz.mjs` lê os CSVs exportados do
+  TirzTracker, faz backup de `data/dados.json` antes de alterar (só se
+  o arquivo existir) e é idempotente por `base44Id` — rodar de novo
+  atualiza, não duplica. Não importa `created_by`, `created_by_id`, nem
+  o CSV de usuários como paciente; a contagem de usuários só aparece
+  no log do import, como ignorados.
+- Entidades que estavam zeradas no Base44 (Anexo, ExameLaboratorial,
+  Pagamento e RegistroDose) não ganharam dados inventados: não há CSV
+  delas e o módulo não finge que existem.
+- Foto de evolução: só a referência `foto_url`, sem baixar foto.
+- Rotas novas, todas com login: `GET /api/tirz/resumo`,
+  `GET /api/tirz/clientes` (busca por nome/telefone, filtros de
+  pagamento e dose, lista sem CPF completo),
+  `GET /api/tirz/clientes/:id` (detalhe com pesos, movimentações e
+  fotos, CPF só aqui), `GET /api/tirz/estoque`,
+  `GET /api/tirz/relatorios`, `POST /api/tirz/clientes`,
+  `POST /api/tirz/pesos` e `POST /api/tirz/movimentacoes`
+  (entrada/saída atualiza o estoque e recusa saída que deixaria o
+  estoque negativo).
+- Resumo: contagens, ativos, pagamentos pendente/pago, estoque baixo
+  pela regra simples quantidade até 3, e próximas aplicações e
+  vencimentos em 30 dias (só id e data, sem lista de nomes).
+- Relatórios: totais, contagem por dose e soma de `valor_mensalidade`
+  apenas de clientes ativos, rotulada como mensalidades ativas — nunca
+  como receita paga, porque a entidade Pagamento estava zerada no Base44.
+- Frontend: seção Tirzepatida dentro da aba do profissional, com
+  resumo, busca, detalhe, estoque com alerta de baixo, movimentações
+  e relatórios simples, reaproveitando o estilo atual.
+- `GET /api/health` passou para v1.3 e inclui só as contagens Tirz,
+  sem nenhum dado de paciente.
+
+Pendente para deploy (só com aprovação): publicar esta versão na
+Railway, rodar o import no banco com volume (com backup antes) e
+conferir as contagens ao vivo. Nenhum teste com conta ou paciente
+foi feito ao vivo nesta versão.
+
 # Clínica Única v1.2 — modo real — Gineco primeiro
 
 ## Expansão fase 1 (2026-11-02, publicada e verificada ao vivo)
@@ -220,3 +271,8 @@ fbbrmuseia.
 - `GET /api/pacientes`, `POST /api/pacientes`, `GET /api/pacientes/:id` (só com login)
 - `POST /api/pacientes/:id/evolucoes|anamneses|procedimentos|planos` (só com login)
 - `POST /api/prescrever`, `GET /api/prescricoes`, `GET /api/profissional/resumo` (só com login)
+- Tirzepatida (v1.3, só com login): `GET /api/tirz/resumo`,
+  `GET /api/tirz/clientes`, `GET /api/tirz/clientes/:id`,
+  `GET /api/tirz/estoque`, `GET /api/tirz/relatorios`,
+  `POST /api/tirz/clientes`, `POST /api/tirz/pesos`,
+  `POST /api/tirz/movimentacoes`
