@@ -1,3 +1,30 @@
+# Clínica Única v1.2 — modo real — Gineco primeiro
+
+## Expansão fase 1 (2026-11-02, só local por enquanto, sem deploy)
+
+Código próprio, sem copiar visual, marca ou banco de outro sistema.
+O que entrou, dentro da área do profissional logada:
+
+- Pacientes: cadastro e busca por nome ou telefone, com total de
+  consultas e de documentos. Quem agenda pela primeira vez já vira
+  paciente automaticamente, pelo nome e telefone do agendamento.
+  Agendamentos antigos viram fichas na migração, um por telefone.
+- Prontuário por paciente: evolução, anamnese (queixa, história,
+  antecedentes, alergias, medicamentos em uso), procedimentos e plano
+  de tratamento, além das notas antigas por agendamento.
+- Prescrever: Receituário, Atestado, Declaração, Carta, Solicitação
+  de Exames, Solicitação de Cirurgia e Laudo, sempre ligados a um
+  paciente e só visíveis para a profissional logada, com impressão
+  pela própria página do navegador.
+- Próximos pacientes: resumo com total de pacientes, consultas de
+  hoje e de amanhã e as próximas 10 consultas.
+- Nada disso muda o fluxo público: agendar, confirmar, ver as
+  próprias consultas e a área do profissional continuam iguais.
+  Testado localmente em 2026-11-02: sem login dá 401, com login
+  cria paciente, evolução, anamnese, procedimento, plano e
+  receituário, e o agendamento cria a ficha sozinho. Tipo de
+  documento inválido é recusado. Deploy só depois da sua aprovação.
+
 # Clínica Única v1.1 — modo real — Gineco primeiro
 
 Sistema próprio, em português, sem copiar código, visual ou marca do Doctoralia.
@@ -186,3 +213,6 @@ fbbrmuseia.
 - `GET /api/profissional/eu`, `POST /api/profissional/cadastro`,
   `POST /api/profissional/login`, `POST /api/profissional/logout`
 - `POST /api/lembretes/enviar` (só com login; devolve enviado ou não enviado com o motivo)
+- `GET /api/pacientes`, `POST /api/pacientes`, `GET /api/pacientes/:id` (só com login)
+- `POST /api/pacientes/:id/evolucoes|anamneses|procedimentos|planos` (só com login)
+- `POST /api/prescrever`, `GET /api/prescricoes`, `GET /api/profissional/resumo` (só com login)

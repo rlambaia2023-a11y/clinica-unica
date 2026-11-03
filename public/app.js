@@ -168,4 +168,56 @@ $("btnSalvarNota").onclick = async () => {
   const d = await api("/api/prontuario", "POST", { agendamentoId: $("notaAgId").value, nota: $("resumoIA").textContent, origem: "profissional+ia" });
   $("resultadoNota").textContent = d.ok ? "Nota salva no prontuário, já revisada pelo profissional." : d.erro;
 };
+let pacienteSelecionado = null;
+let listaPacientesCache = [];
+async function carregarPacientes() {
+  const d = await api(`/api/pacientes?busca=${encodeURIComponent($("buscaPaciente").value || "")}`);
+  if (!d.ok) { $("listaPacientes").innerHTML = `<p>${d.erro}</p>`; return; }
+  listaPacientesCache = d.pacientes || [];
+  $("prescPaciente").innerHTML = listaPacientesCache.map((p) => `<option value="${p.id}">${p.nome} — ${p.telefone}</option>`).join("") || "<option value=''>Nenhum paciente ainda</option>";
+  $("listaPacientes").innerHTML = listaPacientesCache.map((p) => `<div class="item"><strong>${p.nome}</strong> — ${p.telefone}${p.email ? " — " + p.email : ""}<br>${p.totalAgendamentos} consulta(s) · ${p.totalPrescricoes} documento(s)<br><button onclick="abrirProntuario(${p.id})">Abrir prontuário</button></div>`).join("") || "<p>Nenhum paciente cadastrado ainda.</p>";
+}
+window.abrirProntuario = async (id) => {
+  const d = await api(`/api/pacientes/${id}`);
+  if (!d.ok) { alert(d.erro); return; }
+  pacienteSelecionado = d.paciente;
+  $("pacienteSelecionadoTexto").textContent = `Paciente selecionado: ${d.paciente.nome} — ${d.paciente.telefone}`;
+  const sec = (titulo, itens) => `<h3>${titulo}</h3>` + (itens.length ? itens.map((x) => `<div class="item">${x.data ? x.data + " — " : ""}${[x.titulo, x.nome, x.texto, x.descricao, x.etapas, x.queixa, x.historia, x.antecedentes, x.alergias, x.medicamentosUso, x.itens].filter(Boolean).join(" · ")}</div>`).join("") : "<p>Nenhum registro.</p>");
+  $("detalhePaciente").innerHTML =
+    `<p><strong>${d.paciente.nome}</strong> — ${d.paciente.telefone} — ${d.paciente.email || "sem e-mail"} — nascimento: ${d.paciente.dataNascimento || "não informado"}<br>${d.paciente.observacoes || ""}</p>` +
+    sec("Consultas", d.agendamentos, "") + sec("Evoluções", d.evolucoes, "") + sec("Anamneses", d.anamneses, "") + sec("Procedimentos", d.procedimentos, "") + sec("Planos de tratamento", d.planosTratamento, "") + sec("Documentos prescritos", d.prescricoes, "");
+  $("prescPaciente").value = String(id);
+  carregarPrescricoes();
+};
+async function carregarPrescricoes() {
+  const pid = $("prescPaciente").value;
+  if (!pid) { $("listaPrescricoes").innerHTML = ""; return; }
+  const d = await api(`/api/prescricoes?pacienteId=${pid}`);
+  $("listaPrescricoes").innerHTML = (d.prescricoes || []).map((r) => `<div class="item"><strong>${r.tipo}</strong> — ${r.data}<br>${r.titulo}<br>${r.texto}<br>${r.itens ? "Itens: " + r.itens : ""}<br><button onclick="window.print()">Imprimir esta página</button></div>`).join("") || "<p>Nenhum documento para este paciente ainda.</p>";
+}
+$("btnResumo").onclick = async () => {
+  const d = await api("/api/profissional/resumo");
+  if (!d.ok) { $("listaResumo").innerHTML = `<p>${d.erro}</p>`; return; }
+  $("listaResumo").innerHTML = `<p>Pacientes: ${d.totalPacientes} · Hoje: ${d.hojeTotal} consulta(s) · Amanhã: ${d.amanhaTotal} consulta(s)</p>` + (d.proximos || []).map((a) => `<div class="item"><strong>${a.data} às ${a.hora} — ${a.nome}</strong> (${a.telefone}) — ${a.tipoConsulta || ""} — ${a.status}</div>`).join("");
+  carregarPacientes();
+};
+$("formPaciente").onsubmit = async (e) => {
+  e.preventDefault();
+  const d = await api("/api/pacientes", "POST", { nome: $("pacNome").value, telefone: $("pacTelefone").value, email: $("pacEmail").value, dataNascimento: $("pacNascimento").value, observacoes: $("pacObs").value });
+  $("resultadoPaciente").textContent = d.ok ? (d.mensagem || "Paciente salvo.") : d.erro;
+  if (d.ok) carregarPacientes();
+};
+$("btnBuscarPaciente").onclick = carregarPacientes;
+function precisaPaciente() { if (!pacienteSelecionado) { $("resultadoProntuario").textContent = "Abra o prontuário de um paciente primeiro, na lista acima."; return false; } return true; }
+$("formEvolucao").onsubmit = async (e) => { e.preventDefault(); if (!precisaPaciente()) return; const d = await api(`/api/pacientes/${pacienteSelecionado.id}/evolucoes`, "POST", { texto: $("evoTexto").value }); $("resultadoProntuario").textContent = d.ok ? "Evolução salva." : d.erro; if (d.ok) abrirProntuario(pacienteSelecionado.id); };
+$("formAnamnese").onsubmit = async (e) => { e.preventDefault(); if (!precisaPaciente()) return; const d = await api(`/api/pacientes/${pacienteSelecionado.id}/anamneses`, "POST", { queixa: $("anaQueixa").value, historia: $("anaHistoria").value, antecedentes: $("anaAntecedentes").value, alergias: $("anaAlergias").value, medicamentosUso: $("anaMedicamentos").value }); $("resultadoProntuario").textContent = d.ok ? "Anamnese salva." : d.erro; if (d.ok) abrirProntuario(pacienteSelecionado.id); };
+$("formProcedimento").onsubmit = async (e) => { e.preventDefault(); if (!precisaPaciente()) return; const d = await api(`/api/pacientes/${pacienteSelecionado.id}/procedimentos`, "POST", { nome: $("procNome").value, descricao: $("procDescricao").value, data: $("procData").value }); $("resultadoProntuario").textContent = d.ok ? "Procedimento salvo." : d.erro; if (d.ok) abrirProntuario(pacienteSelecionado.id); };
+$("formPlano").onsubmit = async (e) => { e.preventDefault(); if (!precisaPaciente()) return; const d = await api(`/api/pacientes/${pacienteSelecionado.id}/planos`, "POST", { titulo: $("planoTitulo").value, etapas: $("planoEtapas").value }); $("resultadoProntuario").textContent = d.ok ? "Plano salvo." : d.erro; if (d.ok) abrirProntuario(pacienteSelecionado.id); };
+$("formPrescrever").onsubmit = async (e) => {
+  e.preventDefault();
+  const d = await api("/api/prescrever", "POST", { pacienteId: $("prescPaciente").value, tipo: $("prescTipo").value, titulo: $("prescTitulo").value, texto: $("prescTexto").value, itens: $("prescItens").value });
+  $("resultadoPrescrever").textContent = d.ok ? `${d.prescricao.tipo} salvo para o paciente.` : d.erro;
+  if (d.ok) carregarPrescricoes();
+};
+$("prescPaciente").onchange = carregarPrescricoes;
 carregar();

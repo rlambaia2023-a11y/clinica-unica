@@ -106,6 +106,76 @@
     <button id="btnSalvarNota">Salvar nota no prontuário</button>
   </div>
   <p id="resultadoNota" class="resposta"></p>
+
+  <h2>Próximos pacientes</h2>
+  <p>Resumo da profissional logada: quantos pacientes cadastrados, quantas consultas hoje e amanhã, e as próximas consultas.</p>
+  <button id="btnResumo" type="button">Ver resumo</button>
+  <div id="listaResumo"></div>
+
+  <h2>Pacientes</h2>
+  <p>Só a profissional logada vê esta lista. Um paciente novo também aparece aqui automaticamente quando agenda pela primeira vez.</p>
+  <form id="formPaciente" class="form">
+    <h3>Cadastrar ou atualizar paciente pelo telefone</h3>
+    <input id="pacNome" placeholder="Nome completo" required>
+    <input id="pacTelefone" placeholder="WhatsApp com DDD" required>
+    <input id="pacEmail" type="email" placeholder="E-mail (opcional)">
+    <input id="pacNascimento" type="date" aria-label="Data de nascimento">
+    <input id="pacObs" placeholder="Observações (opcional)">
+    <button type="submit">Salvar paciente</button>
+  </form>
+  <p id="resultadoPaciente" class="resposta"></p>
+  <div class="linha">
+    <input id="buscaPaciente" placeholder="Buscar paciente por nome ou telefone">
+    <button id="btnBuscarPaciente" type="button">Buscar</button>
+  </div>
+  <div id="listaPacientes"></div>
+
+  <h2>Prontuário do paciente selecionado</h2>
+  <p id="pacienteSelecionadoTexto">Nenhum paciente selecionado. Clique em “Abrir prontuário” na lista acima.</p>
+  <div id="detalhePaciente"></div>
+  <form class="form" id="formEvolucao">
+    <h3>Evolução</h3>
+    <textarea id="evoTexto" rows="3" placeholder="Evolução da consulta..."></textarea>
+    <button type="submit">Salvar evolução</button>
+  </form>
+  <form class="form" id="formAnamnese">
+    <h3>Anamnese</h3>
+    <input id="anaQueixa" placeholder="Queixa principal">
+    <input id="anaHistoria" placeholder="História da doença atual">
+    <input id="anaAntecedentes" placeholder="Antecedentes">
+    <input id="anaAlergias" placeholder="Alergias">
+    <input id="anaMedicamentos" placeholder="Medicamentos em uso">
+    <button type="submit">Salvar anamnese</button>
+  </form>
+  <form class="form" id="formProcedimento">
+    <h3>Procedimento</h3>
+    <input id="procNome" placeholder="Nome do procedimento">
+    <input id="procDescricao" placeholder="Descrição">
+    <input id="procData" type="date" aria-label="Data do procedimento">
+    <button type="submit">Salvar procedimento</button>
+  </form>
+  <form class="form" id="formPlano">
+    <h3>Plano de tratamento</h3>
+    <input id="planoTitulo" placeholder="Título do plano">
+    <textarea id="planoEtapas" rows="3" placeholder="Etapas, uma por linha..."></textarea>
+    <button type="submit">Salvar plano</button>
+  </form>
+  <p id="resultadoProntuario" class="resposta"></p>
+
+  <h2>Prescrever</h2>
+  <p>Documento só da profissional logada, ligado ao paciente. O texto fica salvo no prontuário e pode ser copiado ou impresso pelo navegador.</p>
+  <form id="formPrescrever" class="form">
+    <select id="prescPaciente" aria-label="Paciente"></select>
+    <select id="prescTipo" aria-label="Tipo de documento">
+      <option>Receituário</option><option>Atestado</option><option>Declaração</option><option>Carta</option><option>Solicitação de Exames</option><option>Solicitação de Cirurgia</option><option>Laudo</option>
+    </select>
+    <input id="prescTitulo" placeholder="Título (opcional, usa o tipo se ficar vazio)">
+    <textarea id="prescTexto" rows="5" placeholder="Texto do documento..."></textarea>
+    <input id="prescItens" placeholder="Itens, separados por ponto e vírgula (opcional)">
+    <button type="submit">Salvar documento</button>
+  </form>
+  <p id="resultadoPrescrever" class="resposta"></p>
+  <div id="listaPrescricoes"></div>
 </section>
 </main>
 <footer><p>Código próprio, em português. Nada aqui foi copiado do Doctoralia: só as funções foram analisadas e refeitas do zero. O Gineco-AI continua separado, com protocolos, calculadoras completas e busca inteligente; aqui fica a camada de agendamento da clínica. Privacidade: dados de paciente ficam só na clínica, para agendamento e lembrete; prontuário só é visto pela profissional logada.</p></footer>

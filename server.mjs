@@ -106,11 +106,74 @@ function seed() {
     agendamentos: [],
     listaEspera: [],
     prontuarios: [],
+    // Fase 1 da expansão (código próprio, sem copiar outro sistema):
+    // pacientes é a ficha central. Evolução, anamnese, procedimento,
+    // plano e prescrição penduram nela, sempre por pacienteId.
+    // O banco começa vazio de pacientes novos; só agendamentos antigos
+    // geram fichas na migração abaixo, pelo nome e telefone já salvos.
+    pacientes: [],
+    evolucoes: [],
+    anamneses: [],
+    procedimentos: [],
+    planosTratamento: [],
+    prescricoes: [],
     contador: 1,
+  };
+}
+const TIPOS_PRESCRICAO = ["Receituário", "Atestado", "Declaração", "Carta", "Solicitação de Exames", "Solicitação de Cirurgia", "Laudo"];
+function soDigitos(t) { return String(t || "").replace(/\D/g, ""); }
+function pacientePorTelefone(tel) {
+  const d = soDigitos(tel);
+  if (!d) return null;
+  return db.pacientes.find((p) => soDigitos(p.telefone) === d) || null;
+}
+function criarOuAtualizarPaciente({ nome, telefone, email }) {
+  if (!nome || !telefone) return null;
+  const existente = pacientePorTelefone(telefone);
+  if (existente) {
+    if (email && !existente.email) existente.email = email;
+    return existente;
+  }
+  const p = { id: db.contador++, nome, telefone, email: email || "", dataNascimento: "", observacoes: "", criadoEm: new Date().toISOString() };
+  db.pacientes.push(p);
+  return p;
+}
+function prontuarioDoPaciente(pacienteId) {
+  const id = Number(pacienteId);
+  const p = db.pacientes.find((x) => x.id === id);
+  if (!p) return null;
+  const ags = db.agendamentos.filter((a) => a.pacienteId === id || soDigitos(a.telefone) === soDigitos(p.telefone));
+  const idsAg = new Set(ags.map((a) => a.id));
+  return {
+    paciente: p,
+    agendamentos: ags.sort((a, b) => (b.data + b.hora).localeCompare(a.data + a.hora)),
+    prontuariosAntigos: (db.prontuarios || []).filter((r) => idsAg.has(r.agendamentoId)),
+    evolucoes: (db.evolucoes || []).filter((r) => r.pacienteId === id).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)),
+    anamneses: (db.anamneses || []).filter((r) => r.pacienteId === id).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)),
+    procedimentos: (db.procedimentos || []).filter((r) => r.pacienteId === id).sort((a, b) => (b.data || b.criadoEm).localeCompare(a.data || a.criadoEm)),
+    planosTratamento: (db.planosTratamento || []).filter((r) => r.pacienteId === id).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)),
+    prescricoes: (db.prescricoes || []).filter((r) => r.pacienteId === id).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm)),
   };
 }
 function migrar(d) {
   let mudou = false;
+  for (const chave of ["pacientes", "evolucoes", "anamneses", "procedimentos", "planosTratamento", "prescricoes"]) {
+    if (!Array.isArray(d[chave])) { d[chave] = []; mudou = true; }
+  }
+  // Fichas a partir de agendamentos antigos: um paciente por telefone.
+  // Não cria paciente inventado e não importa dado de nenhum outro sistema.
+  if (Array.isArray(d.agendamentos)) {
+    for (const a of d.agendamentos) {
+      if (!a.pacienteId) {
+        const existente = d.pacientes.find((p) => String(p.telefone || "").replace(/\D/g, "") === String(a.telefone || "").replace(/\D/g, "") && a.telefone);
+        if (existente) { a.pacienteId = existente.id; mudou = true; }
+        else if (a.nome && a.telefone) {
+          const p = { id: d.contador++, nome: a.nome, telefone: a.telefone, email: "", dataNascimento: "", observacoes: "", criadoEm: a.criadoEm || new Date().toISOString() };
+          d.pacientes.push(p); a.pacienteId = p.id; mudou = true;
+        }
+      }
+    }
+  }
   if (!d.configHorarios) { d.configHorarios = CONFIG_HORARIOS_PADRAO; mudou = true; }
   if (!d.usuariosProfissionais) { d.usuariosProfissionais = []; mudou = true; }
   if (d.clinica && typeof d.clinica.aviso === "string" && d.clinica.aviso.startsWith("Demonstração")) {
@@ -245,7 +308,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   const rota = url.pathname;
 
-  if (rota === "/api/health") return enviar(res, 200, { ok: true, servico: "clinica-unica", versao: "v1.1", modo: "real", ia_configurada: Boolean(process.env.GEMINI_API_KEY), modelo_ia: MODELO_IA, cache_ia: cacheIA.size, agendamentos: db.agendamentos.length, area_profissional_protegida: true, login_profissional_tem_conta: db.usuariosProfissionais.length > 0, whatsapp_provedor: process.env.WHATSAPP_PROVIDER || "nao_configurado" });
+  if (rota === "/api/health") return enviar(res, 200, { ok: true, servico: "clinica-unica", versao: "v1.2", modo: "real", ia_configurada: Boolean(process.env.GEMINI_API_KEY), modelo_ia: MODELO_IA, cache_ia: cacheIA.size, agendamentos: db.agendamentos.length, pacientes: (db.pacientes || []).length, prescricoes: (db.prescricoes || []).length, tiposPrescricao: TIPOS_PRESCRICAO, area_profissional_protegida: true, login_profissional_tem_conta: db.usuariosProfissionais.length > 0, whatsapp_provedor: process.env.WHATSAPP_PROVIDER || "nao_configurado" });
   if (rota === "/api/clinica") {
     const { whatsappInterno, ...clinicaPublica } = db.clinica;
     return enviar(res, 200, { clinica: clinicaPublica, profissionais: db.profissionais, especialidades: [...new Set(db.profissionais.map((p) => p.especialidade))], tiposConsulta: db.tiposConsulta || [], duracaoMinutos: (db.configHorarios && db.configHorarios.duracaoMinutos) || 60 });
@@ -324,7 +387,8 @@ const server = http.createServer(async (req, res) => {
     if (!b.nome || !b.telefone || !b.profissionalId || !b.data || !b.hora) return enviar(res, 400, { ok: false, erro: "Faltam nome, telefone, profissional, data ou hora." });
     if (!localReservavel(localId)) return enviar(res, 400, { ok: false, erro: "Este local ainda não tem endereço confirmado e não está aberto para reserva. Escolha Maraclin, Santa Casa ou online." });
     if (!slots(b.profissionalId, b.data, localId).find((s) => s.hora === b.hora && s.livre)) return enviar(res, 409, { ok: false, erro: "Esse horário já está ocupado ou não atende neste dia e local. Entre na lista de espera que avisamos se liberar." });
-    const ag = { id: db.contador++, codigo: codigo(), nome: b.nome, telefone: b.telefone, profissionalId: b.profissionalId, data: b.data, hora: b.hora, tipoConsulta: b.tipoConsulta || "", modalidade: localId === "online" ? "Online" : "Presencial", localId, linkMeet: "", motivo: b.motivo || "", canal: b.canal || "site", status: "aguardando", criadoEm: new Date().toISOString() };
+    const paciente = criarOuAtualizarPaciente({ nome: b.nome, telefone: b.telefone, email: b.email || "" });
+    const ag = { id: db.contador++, codigo: codigo(), nome: b.nome, telefone: b.telefone, pacienteId: paciente?.id || null, profissionalId: b.profissionalId, data: b.data, hora: b.hora, tipoConsulta: b.tipoConsulta || "", modalidade: localId === "online" ? "Online" : "Presencial", localId, linkMeet: "", motivo: b.motivo || "", canal: b.canal || "site", status: "aguardando", criadoEm: new Date().toISOString() };
     db.agendamentos.push(ag); salvar();
     return enviar(res, 201, { ok: true, agendamento: ag });
   }
@@ -427,6 +491,74 @@ const server = http.createServer(async (req, res) => {
     return enviar(res, 200, { ok: true, agendamento: ag });
   }
 
+  // ---- Fase 1: pacientes, prontuário e prescrever (só profissional logado) ----
+  if (rota === "/api/pacientes" && req.method === "GET") {
+    if (!profOk(req, res)) return;
+    const busca = (url.searchParams.get("busca") || "").toLowerCase();
+    const lista = (db.pacientes || []).filter((p) => !busca || p.nome.toLowerCase().includes(busca) || soDigitos(p.telefone).includes(soDigitos(busca))).sort((a, b) => a.nome.localeCompare(b.nome)).map((p) => ({
+      ...p,
+      totalAgendamentos: db.agendamentos.filter((a) => a.pacienteId === p.id).length,
+      totalPrescricoes: (db.prescricoes || []).filter((r) => r.pacienteId === p.id).length,
+    }));
+    return enviar(res, 200, { ok: true, pacientes: lista });
+  }
+  if (rota === "/api/pacientes" && req.method === "POST") {
+    if (!profOk(req, res)) return;
+    const b = await lerCorpo(req);
+    if (!b.nome || !b.telefone) return enviar(res, 400, { ok: false, erro: "Informe nome e telefone do paciente." });
+    const existente = pacientePorTelefone(b.telefone);
+    if (existente) {
+      existente.nome = b.nome; if (b.email !== undefined) existente.email = b.email; if (b.dataNascimento !== undefined) existente.dataNascimento = b.dataNascimento; if (b.observacoes !== undefined) existente.observacoes = b.observacoes;
+      salvar(); return enviar(res, 200, { ok: true, paciente: existente, mensagem: "Paciente já existia pelo telefone e foi atualizado." });
+    }
+    const p = { id: db.contador++, nome: b.nome, telefone: b.telefone, email: b.email || "", dataNascimento: b.dataNascimento || "", observacoes: b.observacoes || "", criadoEm: new Date().toISOString() };
+    db.pacientes.push(p); salvar();
+    return enviar(res, 201, { ok: true, paciente: p });
+  }
+  const mPaciente = rota.match(/^\/api\/pacientes\/(\d+)$/);
+  if (mPaciente && req.method === "GET") {
+    if (!profOk(req, res)) return;
+    const pront = prontuarioDoPaciente(mPaciente[1]);
+    if (!pront) return enviar(res, 404, { ok: false, erro: "Paciente não encontrado." });
+    return enviar(res, 200, { ok: true, ...pront });
+  }
+  const mSub = rota.match(/^\/api\/pacientes\/(\d+)\/(evolucoes|anamneses|procedimentos|planos)$/);
+  if (mSub && req.method === "POST") {
+    if (!profOk(req, res)) return;
+    const pacienteId = Number(mSub[1]);
+    if (!db.pacientes.find((p) => p.id === pacienteId)) return enviar(res, 404, { ok: false, erro: "Paciente não encontrado." });
+    const b = await lerCorpo(req);
+    const colecao = { evolucoes: "evolucoes", anamneses: "anamneses", procedimentos: "procedimentos", planos: "planosTratamento" }[mSub[2]];
+    const texto = b.texto || b.descricao || b.titulo || "";
+    if (!texto && mSub[2] !== "anamneses") return enviar(res, 400, { ok: false, erro: "Escreva o conteúdo antes de salvar." });
+    if (mSub[2] === "anamneses" && !b.queixa && !b.historia && !texto) return enviar(res, 400, { ok: false, erro: "Preencha pelo menos a queixa ou a história na anamnese." });
+    const reg = { id: db.contador++, pacienteId, agendamentoId: b.agendamentoId ? Number(b.agendamentoId) : null, texto, titulo: b.titulo || "", queixa: b.queixa || "", historia: b.historia || "", antecedentes: b.antecedentes || "", alergias: b.alergias || "", medicamentosUso: b.medicamentosUso || "", nome: b.nome || "", descricao: b.descricao || "", etapas: b.etapas || "", data: b.data || hojeSP(0), criadoEm: new Date().toISOString() };
+    db[colecao].push(reg); salvar();
+    return enviar(res, 201, { ok: true, registro: reg });
+  }
+  if (rota === "/api/prescrever" && req.method === "POST") {
+    if (!profOk(req, res)) return;
+    const b = await lerCorpo(req);
+    if (!TIPOS_PRESCRICAO.includes(b.tipo)) return enviar(res, 400, { ok: false, erro: `Tipo inválido. Use um destes: ${TIPOS_PRESCRICAO.join(", ")}.` });
+    if (!db.pacientes.find((p) => p.id === Number(b.pacienteId))) return enviar(res, 404, { ok: false, erro: "Paciente não encontrado. Cadastre o paciente antes de prescrever." });
+    if (!b.texto) return enviar(res, 400, { ok: false, erro: "Escreva o conteúdo do documento antes de salvar." });
+    const doc = { id: db.contador++, pacienteId: Number(b.pacienteId), tipo: b.tipo, titulo: b.titulo || b.tipo, texto: b.texto, itens: b.itens || "", data: b.data || hojeSP(0), criadoEm: new Date().toISOString() };
+    db.prescricoes.push(doc); salvar();
+    return enviar(res, 201, { ok: true, prescricao: doc });
+  }
+  if (rota === "/api/prescricoes" && req.method === "GET") {
+    if (!profOk(req, res)) return;
+    const pid = url.searchParams.get("pacienteId");
+    const lista = (db.prescricoes || []).filter((r) => !pid || r.pacienteId === Number(pid)).sort((a, b) => b.criadoEm.localeCompare(a.criadoEm));
+    return enviar(res, 200, { ok: true, prescricoes: lista, tipos: TIPOS_PRESCRICAO });
+  }
+  if (rota === "/api/profissional/resumo" && req.method === "GET") {
+    if (!profOk(req, res)) return;
+    const hoje = hojeSP(0), amanha = hojeSP(1);
+    const proximos = db.agendamentos.filter((a) => a.data >= hoje && a.status !== "cancelado").sort((a, b) => (a.data + a.hora).localeCompare(b.data + b.hora)).slice(0, 10);
+    return enviar(res, 200, { ok: true, hoje, amanha, totalPacientes: (db.pacientes || []).length, hojeTotal: db.agendamentos.filter((a) => a.data === hoje).length, amanhaTotal: db.agendamentos.filter((a) => a.data === amanha).length, proximos });
+  }
+
   // Arquivos estáticos
   let file = path.join(PUBLIC_DIR, rota === "/" ? "index.html" : rota);
   if (!file.startsWith(PUBLIC_DIR) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end("Não encontrado"); }
@@ -434,4 +566,4 @@ const server = http.createServer(async (req, res) => {
   fs.createReadStream(file).pipe(res);
 });
 
-server.listen(PORT, () => console.log(`Clínica Única v1.1 em http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`Clínica Única v1.2 em http://localhost:${PORT}`));
