@@ -239,6 +239,25 @@
     <button type="submit">Salvar movimentação</button>
   </form>
   <p id="resultadoTirzMov" class="resposta"></p>
+
+  <h2>Locais de atendimento</h2>
+  <p>Só a profissional logada cadastra locais aqui. O local novo passa a aparecer na lista pública "Locais de atendimento" e na escolha de local do agendamento. O endereço é informado pela profissional e fica como "a confirmar", sem verificação em busca pública.</p>
+  <form id="formLocal" class="form">
+    <h3>Adicionar local de atendimento</h3>
+    <input id="localNome" placeholder="Nome do local" required>
+    <input id="localEndereco" placeholder="Endereço" required>
+    <input id="localCidade" placeholder="Cidade (opcional)">
+    <input id="localCep" placeholder="CEP (opcional)">
+    <input id="localTelefone" placeholder="Telefone (opcional)">
+    <input id="localHorario" placeholder="Horário de atendimento (opcional)">
+    <label><input id="localReservavel" type="checkbox" checked> Disponível para reserva</label>
+    <button type="submit">Salvar local</button>
+  </form>
+  <p id="resultadoLocal" class="resposta"></p>
+  <div class="linha">
+    <button id="btnVerLocais" type="button">Ver locais cadastrados</button>
+  </div>
+  <div id="listaLocaisProf"></div>
 </section>
 </main>
 <footer><p>Código próprio, em português. Nada aqui foi copiado do Doctoralia: só as funções foram analisadas e refeitas do zero. O Gineco-AI continua separado, com protocolos, calculadoras completas e busca inteligente; aqui fica a camada de agendamento da clínica. Privacidade: dados de paciente ficam só na clínica, para agendamento e lembrete; prontuário só é visto pela profissional logada.</p></footer>

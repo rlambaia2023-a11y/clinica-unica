@@ -333,4 +333,16 @@ $("formTirzImportar").onsubmit = async (e) => {
     resultado.textContent = "Não foi possível ler um dos CSVs. Confira o arquivo e tente de novo.";
   }
 };
+async function carregarLocaisProf() {
+  const d = await api("/api/clinica");
+  const locais = d.clinica?.locais || [];
+  $("listaLocaisProf").innerHTML = locais.map((l) => `<div class="item"><strong>${l.nome}</strong><br>${l.endereco}${l.cidade ? " — " + l.cidade : ""}<br>${l.reservavel ? "Disponível para reserva" : "Não disponível para reserva"}</div>`).join("") || "<p>Nenhum local cadastrado ainda.</p>";
+}
+$("btnVerLocais").onclick = carregarLocaisProf;
+$("formLocal").onsubmit = async (e) => {
+  e.preventDefault();
+  const d = await api("/api/locais", "POST", { nome: $("localNome").value, endereco: $("localEndereco").value, cidade: $("localCidade").value, cep: $("localCep").value, telefone: $("localTelefone").value, horario: $("localHorario").value, reservavel: $("localReservavel").checked });
+  $("resultadoLocal").textContent = d.ok ? `Local "${d.local.nome}" salvo. Ele já aparece na lista pública e na escolha de local do agendamento.` : d.erro;
+  if (d.ok) { carregar(); carregarLocaisProf(); }
+};
 carregar();

@@ -1,4 +1,4 @@
-// Clínica Única v1.4 — modo real, Gineco primeiro + módulo Tirzepatida.
+// Clínica Única v1.5 — modo real, Gineco primeiro + módulo Tirzepatida + cadastro de locais.
 // v1.4 acrescenta a importação Tirzepatida pela página (POST /api/tirz/importar),
 // só para a profissional logada, com backup antes de gravar. Ainda sem deploy.
 // Módulo Tirzepatida (código próprio, sem copiar o Base44): coleções
@@ -136,6 +136,10 @@ function seed() {
 }
 const TIPOS_PRESCRICAO = ["Receituário", "Atestado", "Declaração", "Carta", "Solicitação de Exames", "Solicitação de Cirurgia", "Laudo"];
 function soDigitos(t) { return String(t || "").replace(/\D/g, ""); }
+function slugLocal(nome) {
+  const slug = String(nome || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug || "local";
+}
 function pacientePorTelefone(tel) {
   const d = soDigitos(tel);
   if (!d) return null;
@@ -374,10 +378,40 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   const rota = url.pathname;
 
-  if (rota === "/api/health") return enviar(res, 200, { ok: true, servico: "clinica-unica", versao: "v1.4", modo: "real", ia_configurada: Boolean(process.env.GEMINI_API_KEY), modelo_ia: MODELO_IA, cache_ia: cacheIA.size, agendamentos: db.agendamentos.length, pacientes: (db.pacientes || []).length, prescricoes: (db.prescricoes || []).length, tiposPrescricao: TIPOS_PRESCRICAO, area_profissional_protegida: true, login_profissional_tem_conta: db.usuariosProfissionais.length > 0, whatsapp_provedor: process.env.WHATSAPP_PROVIDER || "nao_configurado", tirz: { clientes: (db.tirzClientes || []).length, estoque: (db.tirzEstoque || []).length, movimentacoes: (db.tirzMovimentacoes || []).length, pesos: (db.tirzPesos || []).length, fotos: (db.tirzFotos || []).length } });
+  if (rota === "/api/health") return enviar(res, 200, { ok: true, servico: "clinica-unica", versao: "v1.5", modo: "real", ia_configurada: Boolean(process.env.GEMINI_API_KEY), modelo_ia: MODELO_IA, cache_ia: cacheIA.size, agendamentos: db.agendamentos.length, pacientes: (db.pacientes || []).length, prescricoes: (db.prescricoes || []).length, tiposPrescricao: TIPOS_PRESCRICAO, area_profissional_protegida: true, login_profissional_tem_conta: db.usuariosProfissionais.length > 0, whatsapp_provedor: process.env.WHATSAPP_PROVIDER || "nao_configurado", tirz: { clientes: (db.tirzClientes || []).length, estoque: (db.tirzEstoque || []).length, movimentacoes: (db.tirzMovimentacoes || []).length, pesos: (db.tirzPesos || []).length, fotos: (db.tirzFotos || []).length } });
   if (rota === "/api/clinica") {
     const { whatsappInterno, ...clinicaPublica } = db.clinica;
     return enviar(res, 200, { clinica: clinicaPublica, profissionais: db.profissionais, especialidades: [...new Set(db.profissionais.map((p) => p.especialidade))], tiposConsulta: db.tiposConsulta || [], duracaoMinutos: (db.configHorarios && db.configHorarios.duracaoMinutos) || 60 });
+  }
+  // Cadastro de local de atendimento, só para a profissional logada.
+  // O local novo entra em clinica.locais e passa a aparecer na lista
+  // pública "Locais de atendimento" e no select de local do agendamento,
+  // que já leem a lista completa. Status "a confirmar": o endereço foi
+  // informado pela profissional, não verificado em busca pública.
+  // A grade de horários de um local novo usa a grade online padrão até
+  // a profissional confirmar horários próprios para ele.
+  if (rota === "/api/locais" && req.method === "POST") {
+    if (!profOk(req, res)) return;
+    const b = await lerCorpo(req);
+    const nome = String(b.nome || "").trim();
+    const endereco = String(b.endereco || "").trim();
+    if (!nome || !endereco) return enviar(res, 400, { ok: false, erro: "Informe o nome e o endereço do local. Nada foi salvo." });
+    if (!Array.isArray(db.clinica.locais)) db.clinica.locais = [];
+    let id = slugLocal(nome);
+    while (db.clinica.locais.some((l) => l.id === id)) id = `${slugLocal(nome)}-${db.contador++}`;
+    const reservavel = b.reservavel === undefined ? true : !(b.reservavel === false || b.reservavel === "false" || b.reservavel === 0);
+    const local = {
+      id, nome, endereco,
+      cidade: String(b.cidade || "").trim(),
+      cep: String(b.cep || "").trim(),
+      telefone: String(b.telefone || "").trim(),
+      horario: String(b.horario || "").trim(),
+      status: "a confirmar",
+      reservavel,
+      fonte: "Cadastrado pela profissional na área do profissional",
+    };
+    db.clinica.locais.push(local); salvar();
+    return enviar(res, 201, { ok: true, local });
   }
   if (rota === "/api/disponibilidade") {
     const prof = url.searchParams.get("profissional"), data = url.searchParams.get("data"), local = url.searchParams.get("local") || "online";
@@ -815,4 +849,4 @@ const server = http.createServer(async (req, res) => {
   fs.createReadStream(file).pipe(res);
 });
 
-server.listen(PORT, () => console.log(`Clínica Única v1.4 em http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`Clínica Única v1.5 em http://localhost:${PORT}`));

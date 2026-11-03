@@ -1,3 +1,14 @@
+# Cadastro de locais de atendimento — só na área do profissional (ainda sem deploy, sem push)
+
+Nada desta alteração foi publicado: sem deploy na Railway e sem push no GitHub. O deploy só acontece com aprovação da profissional. A versão no `GET /api/health` passa para v1.5 nesta alteração, para a verificação ao vivo não confundir com a v1.4 já publicada.
+
+O que entrou, dentro da aba Área do profissional, só para a profissional logada, nunca para o público cadastrar:
+
+- Rota `POST /api/locais`, só com login. Aceita JSON `{nome, endereco, cidade, cep, telefone, horario, reservavel}`. Exige nome e endereço, com erro claro em pt-BR se faltarem, sem gravar nada nesse caso. Gera id único a partir do nome (slug, sem acento, com hífen) mais o contador quando o slug já existe. O local novo entra em `clinica.locais` com status "a confirmar" (endereço informado pela profissional, não verificado em busca pública), `reservavel` conforme o campo enviado (padrão true quando não informado) e os demais campos como informados ou vazios. Devolve o local criado. Não altera os locais existentes, e as regras de `migrar()` para os 3 locais antigos (bom-doutor não reservável, maraclin e santa-casa reserváveis) continuam valendo.
+- Formulário "Adicionar local de atendimento" na área do profissional, com os campos acima e checkbox "Disponível para reserva", botão de salvar e área de resultado, mais lista simples dos locais atuais com nome, endereço, cidade e se está disponível para reserva ou não.
+- A lista pública "Locais de atendimento" e o select de local do agendamento já leem `clinica.locais` completa, então o local novo aparece neles automaticamente, sem outra mudança. Local novo reservável usa a grade online padrão nos horários até a profissional confirmar horários próprios para ele.
+- Nenhum teste com conta ou paciente foi feito ao vivo nesta alteração.
+
 # Clínica Única v1.4 — modo real — importação Tirzepatida pela página (ainda sem deploy, sem push)
 
 Código próprio, sem copiar código do Base44. Nada desta versão foi publicado: sem deploy na Railway e sem push no GitHub. O deploy só acontece com aprovação da profissional.
